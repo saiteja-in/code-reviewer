@@ -2,3 +2,7 @@
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6
 pnpm prisma init --datasource-provider postgresql
+
+
+
+pnpm add @trpc/server @trpc/client @trpc/react-query @tanstack/react-query superjson
