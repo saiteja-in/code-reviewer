@@ -1,0 +1,4 @@
+// this is version 6 , not the latest version
+pnpm add -D prisma@6
+pnpm add -D @prisma/client@6
+pnpm prisma init --datasource-provider postgresql
