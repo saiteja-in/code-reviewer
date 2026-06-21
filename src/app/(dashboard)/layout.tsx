@@ -1,4 +1,4 @@
-import { Header } from "@/components/header";
+import Navbar from "@/components/Navbar";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -10,11 +10,11 @@ export default async function DashboardLayout({
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
-    redirect("/sign-in");
+    redirect("/login");
   }
   return (
     <div className="min-h-screen bg-background">
-      <Header user={session.user} />
+      <Navbar />
       <main className="container mx-auto px-4 py-8">{children}</main>
     </div>
   );
