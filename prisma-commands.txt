@@ -8,3 +8,8 @@ pnpm prisma init --datasource-provider postgresql
 pnpm add @trpc/server @trpc/client @trpc/react-query @tanstack/react-query superjson
 
 npx auth@latest generate // to generate the tables
+
+npx prisma studio
+
+pnpm prisma generate
+pnpm prisma db push
