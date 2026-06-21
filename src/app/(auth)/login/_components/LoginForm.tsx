@@ -50,8 +50,11 @@ export function LoginForm() {
             toast.success("Email sent");
             router.push(`/verify-request?email=${encodeURIComponent(email)}`);
           },
-          onError: () => {
-            toast.error("Error sending email");
+          onError: (ctx) => {
+            const message =
+              ctx.error.message ??
+              "Error sending email. Check your Resend domain configuration.";
+            toast.error(message);
           },
         },
       });

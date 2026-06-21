@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { emailOTP } from "better-auth/plugins";
-import { getResend } from "@/lib/resend";
+import { sendVerificationEmail } from "@/lib/resend";
 import { db } from "../db";
 
 export const auth = betterAuth({
@@ -33,9 +33,8 @@ export const auth = betterAuth({
   plugins: [
     emailOTP({
       async sendVerificationOTP({ email, otp }) {
-        await getResend().emails.send({
-          from: process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev",
-          to: [email],
+        await sendVerificationEmail({
+          to: email,
           subject: "AI Code Review - Verify your email",
           html: `
               <div style="font-family: 'Inter', Arial, sans-serif; max-width: 420px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 1px 6px #0001; padding: 32px 28px;">
