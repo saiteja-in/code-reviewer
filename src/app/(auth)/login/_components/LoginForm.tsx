@@ -27,7 +27,7 @@ export function LoginForm() {
     startGithubTransition(async () => {
       await authClient.signIn.social({
         provider: "github",
-        callbackURL: "/",
+        callbackURL: "/repos",
         fetchOptions: {
           onSuccess: () => {
             toast.success("Signed in with GitHub, you will be redirected...");

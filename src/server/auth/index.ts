@@ -2,23 +2,51 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { emailOTP } from "better-auth/plugins";
 import { sendVerificationEmail } from "@/lib/resend";
+import { GITHUB_OAUTH_SCOPES } from "@/lib/auth-shared";
 import { db } from "../db";
 
 export const auth = betterAuth({
   database: prismaAdapter(db, {
     provider: "postgresql",
   }),
+  user: {
+    additionalFields: {
+      // The GitHub login (e.g. "octocat"). Sourced from the verified GitHub
+      // profile — never user-typed. `input: false` blocks client writes
+      // (e.g. updateUser); the server populates it via mapProfileToUser /
+      // updateUserInfoOnLink.
+      githubUsername: {
+        type: "string",
+        required: false,
+        input: false,
+      },
+    },
+  },
   socialProviders: {
     github: {
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-      scope: ["read:user", "user:email", "repo"],
+      scope: GITHUB_OAUTH_SCOPES,
+      // Set the display name from the GitHub full name (falling back to the
+      // login only when empty/null), and capture the login separately as
+      // `githubUsername`. Applied on first GitHub sign-up and — together with
+      // `updateUserInfoOnLink` below — when an existing email user links GitHub.
+      mapProfileToUser: (profile) => ({
+        name: profile.name || profile.login,
+        githubUsername: profile.login,
+        image: profile.avatar_url,
+      }),
     },
   },
   account: {
     accountLinking: {
       enabled: true,
       trustedProviders: ["github"],
+      // Copy the GitHub profile (name, image, githubUsername) onto an existing
+      // email-OTP user the moment they link GitHub. Email/emailVerified are
+      // left untouched, so linking can't rebind account identity.
+      updateUserInfoOnLink: true,
+      allowDifferentEmails: true,
     },
   },
   session: {
