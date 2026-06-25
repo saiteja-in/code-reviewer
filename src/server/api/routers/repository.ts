@@ -15,6 +15,23 @@ export const repositoryRouter = createTRPCRouter({
     return repositories;
   }),
 
+  get: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const repository = await ctx.db.repository.findUnique({
+        where: { id: input.id, userId: ctx.user.id },
+      });
+
+      if (!repository) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Repository not found",
+        });
+      }
+
+      return repository;
+    }),
+
   fetchFromGithub: protectedProcedure.query(async ({ ctx }) => {
     const accessToken = await getGitHubAccessToken(ctx.user.id);
 

@@ -23,9 +23,11 @@ export interface GitHubPullRequest {
   base: {
     ref: string;
   };
-  additions: number;
-  deletions: number;
-  changed_files: number;
+  // Only returned by the single-PR endpoint (fetchPullRequest), not the list
+  // endpoint — optional so the list view can skip the per-PR enrichment call.
+  additions?: number;
+  deletions?: number;
+  changed_files?: number;
 }
 
 export interface GitHubRepo {
@@ -106,15 +108,10 @@ export async function fetchPullRequests(
     throw new Error(`GitHub API error: ${response.status}`);
   }
 
-  const pulls = (await response.json()) as GitHubPullRequest[];
-
-  // The list endpoint doesn't include additions/deletions/changed_files,
-  // so we fetch each PR individually to get those stats.
-  const detailed = await Promise.all(
-    pulls.map((pr) => fetchPullRequest(accessToken, owner, repo, pr.number)),
-  );
-
-  return detailed;
+  // Single request. The list endpoint returns everything the PR list view
+  // needs except additions/deletions/changed_files (those require a per-PR
+  // call and are shown on the PR detail page via fetchPullRequest instead).
+  return (await response.json()) as GitHubPullRequest[];
 }
 
 export async function fetchPullRequest(
