@@ -1,3 +1,4 @@
+import { pullRequestRouter } from "./routers/pull-request";
 import { repositoryRouter } from "./routers/repository";
 import { createCallerFactory,createTRPCRouter,publicProcedure } from "./trpc";
 
@@ -6,6 +7,7 @@ export const appRouter=createTRPCRouter({
         return {status:"ok",timestamps:Date.now()}
     }),
     repository: repositoryRouter,
+    pullRequest: pullRequestRouter,
 })
 
 export type AppRouter=typeof appRouter;
