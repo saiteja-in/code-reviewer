@@ -2,19 +2,14 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import {
-  fetchPullRequests,
+  fetchPullRequestsGraphQL,
   fetchPullRequest,
   getGitHubAccessToken,
 } from "@/server/services/github";
 
 export const pullRequestRouter = createTRPCRouter({
   list: protectedProcedure
-    .input(
-      z.object({
-        repositoryId: z.string(),
-        state: z.enum(["open", "closed", "all"]).default("open"),
-      }),
-    )
+    .input(z.object({ repositoryId: z.string() }))
     .query(async ({ ctx, input }) => {
       const repository = await ctx.db.repository.findUnique({
         where: { id: input.repositoryId, userId: ctx.user.id },
@@ -43,12 +38,9 @@ export const pullRequestRouter = createTRPCRouter({
         });
       }
 
-      const prs = await fetchPullRequests(
-        accessToken,
-        owner,
-        repo,
-        input.state,
-      );
+      // One GraphQL call returns all PRs with their additions/deletions/
+      // changedFiles. The client filters open/closed/all from this set.
+      const prs = await fetchPullRequestsGraphQL(accessToken, owner, repo);
 
       const existingReviews = await ctx.db.review.findMany({
         where: {
@@ -66,21 +58,7 @@ export const pullRequestRouter = createTRPCRouter({
       const reviewMap = new Map(existingReviews.map((r) => [r.prNumber, r]));
 
       return prs.map((pr) => ({
-        id: pr.id,
-        number: pr.number,
-        title: pr.title,
-        state: pr.state,
-        draft: pr.draft,
-        htmlUrl: pr.html_url,
-        author: {
-          login: pr.user.login,
-          avatarUrl: pr.user.avatar_url,
-        },
-        headRef: pr.head.ref,
-        baseRef: pr.base.ref,
-        createdAt: pr.created_at,
-        updatedAt: pr.updated_at,
-        mergedAt: pr.merged_at,
+        ...pr,
         review: reviewMap.get(pr.number) ?? null,
       }));
     }),

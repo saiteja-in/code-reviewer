@@ -13,6 +13,9 @@ import {
   CheckCircle,
   Loader2,
   ArrowLeft,
+  Plus,
+  Minus,
+  FileText,
 } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -87,6 +90,21 @@ export function PullRequestCard({
                   <ArrowLeft className="mx-1.5 size-3 text-muted-foreground/50" />
                   {pr.headRef}
                 </code>
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <Plus className="size-3" />
+                    <span>{pr.additions}</span>
+                  </span>
+                  <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                    <Minus className="size-3" />
+                    <span>{pr.deletions}</span>
+                  </span>
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <FileText className="size-3" />
+                    <span>{pr.changedFiles}</span>
+                    files
+                  </span>
+                </div>
               </div>
             </div>
           </div>

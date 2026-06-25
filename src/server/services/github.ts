@@ -88,30 +88,134 @@ export async function fetchGitHubRepos(
 }
 
 
-export async function fetchPullRequests(
+export interface PullRequestSummary {
+  id: number;
+  number: number;
+  title: string;
+  state: "open" | "closed";
+  draft: boolean;
+  htmlUrl: string;
+  author: { login: string; avatarUrl: string };
+  headRef: string;
+  baseRef: string;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  createdAt: string;
+  updatedAt: string;
+  mergedAt: string | null;
+}
+
+interface GraphQLPullRequestNode {
+  databaseId: number;
+  number: number;
+  title: string;
+  state: "OPEN" | "CLOSED" | "MERGED";
+  isDraft: boolean;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+  mergedAt: string | null;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  author: { login: string; avatarUrl: string } | null;
+  headRefName: string;
+  baseRefName: string;
+}
+
+interface GraphQLPullRequestsResponse {
+  data?: {
+    repository?: {
+      pullRequests?: { nodes: GraphQLPullRequestNode[] };
+    } | null;
+  };
+  errors?: { message: string }[];
+}
+
+const PULL_REQUESTS_QUERY = `
+  query ($owner: String!, $name: String!) {
+    repository(owner: $owner, name: $name) {
+      pullRequests(first: 30, orderBy: { field: UPDATED_AT, direction: DESC }) {
+        nodes {
+          databaseId
+          number
+          title
+          state
+          isDraft
+          url
+          createdAt
+          updatedAt
+          mergedAt
+          additions
+          deletions
+          changedFiles
+          author {
+            login
+            avatarUrl
+          }
+          headRefName
+          baseRefName
+        }
+      }
+    }
+  }
+`;
+
+// One GraphQL request that returns every PR's additions/deletions/changedFiles,
+// avoiding the REST list endpoint's per-PR (N+1) enrichment calls. The `repo`
+// OAuth scope already covers the GraphQL endpoint.
+export async function fetchPullRequestsGraphQL(
   accessToken: string,
   owner: string,
   repo: string,
-  state: "open" | "closed" | "all" = "open",
-): Promise<GitHubPullRequest[]> {
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/pulls?state=${state}&per_page=30&sort=updated&direction=desc`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.github.v3+json",
-      },
+): Promise<PullRequestSummary[]> {
+  const response = await fetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      query: PULL_REQUESTS_QUERY,
+      variables: { owner, name: repo },
+    }),
+  });
 
   if (!response.ok) {
-    throw new Error(`GitHub API error: ${response.status}`);
+    throw new Error(`GitHub GraphQL error: ${response.status}`);
   }
 
-  // Single request. The list endpoint returns everything the PR list view
-  // needs except additions/deletions/changed_files (those require a per-PR
-  // call and are shown on the PR detail page via fetchPullRequest instead).
-  return (await response.json()) as GitHubPullRequest[];
+  // GraphQL returns HTTP 200 even on query errors — surface them explicitly.
+  const json = (await response.json()) as GraphQLPullRequestsResponse;
+  if (json.errors?.length) {
+    throw new Error(json.errors[0]?.message ?? "GitHub GraphQL error");
+  }
+
+  const nodes = json.data?.repository?.pullRequests?.nodes ?? [];
+
+  return nodes.map((node) => ({
+    id: node.databaseId,
+    number: node.number,
+    title: node.title,
+    // GraphQL state is OPEN | CLOSED | MERGED; merged maps to "closed" with
+    // mergedAt set, which the card uses to show the merge icon.
+    state: node.state === "OPEN" ? "open" : "closed",
+    draft: node.isDraft,
+    htmlUrl: node.url,
+    author: {
+      login: node.author?.login ?? "ghost",
+      avatarUrl: node.author?.avatarUrl ?? "",
+    },
+    headRef: node.headRefName,
+    baseRef: node.baseRefName,
+    additions: node.additions,
+    deletions: node.deletions,
+    changedFiles: node.changedFiles,
+    createdAt: node.createdAt,
+    updatedAt: node.updatedAt,
+    mergedAt: node.mergedAt,
+  }));
 }
 
 export async function fetchPullRequest(
