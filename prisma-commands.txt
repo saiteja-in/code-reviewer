@@ -18,3 +18,33 @@ pnpm prisma db push
 
 pnpm dlx inngest-cli@latest dev
 npx inngest-cli@latest dev -u http://localhost:3000/api/inngest
+
+
+# Check if ngrok is installed
+ngrok --version
+
+# Start the tunnel (maps your local port 3000 to a public URL)
+ngrok http 3000
+
+Go to your repo → Settings → Webhooks → Add webhook
+Fill in:
+Payload URL: https://9d36-115-98-180-203.ngrok-free.app/api/webhooks/github
+Content type: application/json
+Secret: Your generated secret
+Events: Pull requests
+
+
+
+automate this# First, authenticate with GitHub
+gh auth login
+
+# Add webhook to your repo (replace OWNER/REPO with your repo)
+gh api repos/OWNER/REPO/hooks \
+  -f url='https://9d36-115-98-180-203.ngrok-free.app/api/webhooks/github' \
+  -f events='["pull_request"]' \
+  -f secret='your-secret-here' \
+  -f active='true' \
+  -F content_type='json'
+
+# Verify webhook was created
+gh api repos/OWNER/REPO/hooks
