@@ -13,3 +13,7 @@ npx prisma studio
 
 pnpm prisma generate
 pnpm prisma db push
+
+
+
+pnpm dlx inngest-cli@latest dev
