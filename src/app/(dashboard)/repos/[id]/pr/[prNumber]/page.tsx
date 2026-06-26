@@ -21,6 +21,7 @@ export default async function PullRequestDetailPage({
 }) {
   const { id, prNumber } = await params;
   const prNum = Number(prNumber);
+  console.log("pr num",prNum)
 
   if (!Number.isInteger(prNum)) {
     notFound();
@@ -35,6 +36,7 @@ export default async function PullRequestDetailPage({
       }
       throw error;
     });
+  console.log("pr is ",pr)
 
   // Seed the Reviews tab so it renders server-side; the island then polls.
   const initialLatestReview = await api.review.getLatestForPR({
