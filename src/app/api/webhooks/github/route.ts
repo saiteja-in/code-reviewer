@@ -23,7 +23,12 @@ interface PullRequestPayload {
 function verifySignature(payload: string, signature: string | null): boolean {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
   if (!secret) {
-    console.warn("GITHUB_WEBHOOK_SECRET not set, skipping verification");
+    // Fail closed in production; allow locally for convenience.
+    if (process.env.NODE_ENV === "production") {
+      console.error("GITHUB_WEBHOOK_SECRET is not set — rejecting webhook");
+      return false;
+    }
+    console.warn("GITHUB_WEBHOOK_SECRET not set, skipping verification (dev)");
     return true;
   }
 
@@ -34,7 +39,14 @@ function verifySignature(payload: string, signature: string | null): boolean {
   const hmac = crypto.createHmac("sha256", secret);
   const digest = "sha256=" + hmac.update(payload).digest("hex");
 
-  return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature));
+  // timingSafeEqual throws if the buffers differ in length, so guard first.
+  const digestBuf = Buffer.from(digest);
+  const signatureBuf = Buffer.from(signature);
+  if (digestBuf.length !== signatureBuf.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(digestBuf, signatureBuf);
 }
 
 export async function POST(request: NextRequest) {
@@ -52,7 +64,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Event ignored" }, { status: 200 });
   }
 
-  const data = JSON.parse(payload) as PullRequestPayload;
+  let data: PullRequestPayload;
+  try {
+    data = JSON.parse(payload) as PullRequestPayload;
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON payload" },
+      { status: 400 },
+    );
+  }
 
   // Only trigger on open, synchronize (new commits), or reopen
   if (!["opened", "synchronize", "reopened"].includes(data.action)) {
