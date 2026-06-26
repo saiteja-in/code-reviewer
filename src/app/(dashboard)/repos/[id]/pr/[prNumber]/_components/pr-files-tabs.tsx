@@ -1,32 +1,81 @@
 "use client";
 
 import { useState } from "react";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "@/server/api/root";
 import { trpc } from "@/lib/trpc/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, XCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  FileText,
+  XCircle,
+  ScanSearch,
+  Wand2,
+  Clock,
+  CheckCircle,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff-viewer";
+import { ReviewResult } from "@/components/review-result";
+
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type LatestReview = RouterOutputs["review"]["getLatestForPR"];
 
 export function PrFilesTabs({
   repositoryId,
   prNumber,
+  initialLatestReview,
 }: {
   repositoryId: string;
   prNumber: number;
+  initialLatestReview: LatestReview;
 }) {
   const [activeTab, setActiveTab] = useState<"review" | "files">("review");
 
-  const files = trpc.pullRequest.files.useQuery({
-    repositoryId,
-    prNumber,
+  const latestReview = trpc.review.getLatestForPR.useQuery(
+    { repositoryId, prNumber },
+    {
+      initialData: initialLatestReview,
+      // Poll while the background job runs, then stop.
+      refetchInterval: (query) => {
+        const status = query.state.data?.status;
+        return status === "PENDING" || status === "PROCESSING" ? 2000 : false;
+      },
+    },
+  );
+
+  const files = trpc.pullRequest.files.useQuery({ repositoryId, prNumber });
+
+  const triggerReview = trpc.review.trigger.useMutation({
+    onSuccess: () => latestReview.refetch(),
   });
+
+  const review = latestReview.data;
+  const isReviewing =
+    review?.status === "PENDING" || review?.status === "PROCESSING";
+  const reviewCommentCount =
+    review?.status === "COMPLETED" && Array.isArray(review.comments)
+      ? review.comments.length
+      : 0;
+
+  const runReview = () =>
+    triggerReview.mutate({ repositoryId, prNumber });
 
   return (
     <>
       {/* Tabs */}
       <div className="border-b border-border/60">
         <div className="flex items-center gap-1">
+          <TabButton
+            active={activeTab === "review"}
+            onClick={() => setActiveTab("review")}
+            icon={ScanSearch}
+            label="Reviews"
+            count={reviewCommentCount}
+          />
           <TabButton
             active={activeTab === "files"}
             onClick={() => setActiveTab("files")}
@@ -37,7 +86,59 @@ export function PrFilesTabs({
         </div>
       </div>
 
-      {/* Tab Content */}
+      {/* Reviews tab */}
+      {activeTab === "review" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <ReviewStatusBadge status={review?.status ?? null} />
+            {!isReviewing && (
+              <Button
+                onClick={runReview}
+                disabled={triggerReview.isPending}
+                className="gap-1.5"
+              >
+                {triggerReview.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Wand2 className="size-4" />
+                )}
+                {review ? "Re-run review" : "Run AI Review"}
+              </Button>
+            )}
+          </div>
+
+          {review ? (
+            <ReviewResult review={review} />
+          ) : (
+            <Card>
+              <CardContent className="py-16 text-center">
+                <div className="mx-auto size-14 rounded-full bg-primary/10 flex items-center justify-center">
+                  <ScanSearch className="size-7 text-primary" />
+                </div>
+                <p className="mt-4 font-medium">No reviews yet.</p>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+                  Run an AI review to analyze this pull request for bugs,
+                  security issues, and improvements.
+                </p>
+                <Button
+                  className="mt-6 gap-1.5"
+                  onClick={runReview}
+                  disabled={triggerReview.isPending}
+                >
+                  {triggerReview.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="size-4" />
+                  )}
+                  Run AI Review
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Changed Files tab */}
       {activeTab === "files" && (
         <div>
           {files.isLoading ? (
@@ -78,6 +179,65 @@ export function PrFilesTabs({
         </div>
       )}
     </>
+  );
+}
+
+function ReviewStatusBadge({ status }: { status: string | null }) {
+  if (!status) {
+    return (
+      <Badge
+        variant="outline"
+        className="gap-1.5 bg-muted text-muted-foreground"
+      >
+        <Clock className="size-3" />
+        Not reviewed
+      </Badge>
+    );
+  }
+
+  const config: Record<
+    string,
+    { icon: typeof Clock; label: string; className: string; spin?: boolean }
+  > = {
+    COMPLETED: {
+      icon: CheckCircle,
+      label: "AI review completed",
+      className:
+        "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+    },
+    PROCESSING: {
+      icon: Loader2,
+      label: "Analyzing code…",
+      className:
+        "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+      spin: true,
+    },
+    PENDING: {
+      icon: Clock,
+      label: "Queued for review",
+      className:
+        "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    },
+    FAILED: {
+      icon: XCircle,
+      label: "Review failed",
+      className:
+        "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+    },
+  };
+
+  const c = config[status] ?? {
+    icon: Clock,
+    label: "Not reviewed",
+    className: "bg-muted text-muted-foreground",
+  };
+  const Icon = c.icon;
+
+  return (
+    <Badge variant="outline" className={cn("gap-1.5", c.className)}>
+      <Icon className={cn("size-3", c.spin && "animate-spin")} />
+      {c.label}
+    </Badge>
   );
 }
 

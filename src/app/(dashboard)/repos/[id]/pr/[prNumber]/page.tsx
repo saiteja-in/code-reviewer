@@ -36,10 +36,20 @@ export default async function PullRequestDetailPage({
       throw error;
     });
 
+  // Seed the Reviews tab so it renders server-side; the island then polls.
+  const initialLatestReview = await api.review.getLatestForPR({
+    repositoryId: id,
+    prNumber: prNum,
+  });
+
   return (
     <div className="space-y-8">
       <PrHeader pr={pr} repositoryId={id} />
-      <PrFilesTabs repositoryId={id} prNumber={prNum} />
+      <PrFilesTabs
+        repositoryId={id}
+        prNumber={prNum}
+        initialLatestReview={initialLatestReview}
+      />
     </div>
   );
 }

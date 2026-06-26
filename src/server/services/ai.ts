@@ -1,9 +1,15 @@
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let client: Anthropic | null = null;
+
+function getClient(): Anthropic {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY is not set");
+  }
+  return (client ??= new Anthropic());
+}
 
 export const ReviewCommentSchema = z.object({
   file: z.string(),
@@ -35,25 +41,9 @@ const SYSTEM_PROMPT = `You are an expert code reviewer. Analyze the provided pul
 
 Your review should:
 1. Identify bugs, security issues, performance problems, and code style issues
-2. Provide a brief summary of the changes
+2. Provide a brief summary of the changes and overall assessment
 3. Assign a risk score (0-100) based on the complexity and potential issues
-4. Give specific, actionable feedback with line numbers
-
-Respond with valid JSON matching this schema:
-{
-  "summary": "Brief summary of changes and overall assessment",
-  "riskScore": 0-100,
-  "comments": [
-    {
-      "file": "path/to/file.ts",
-      "line": 42,
-      "severity": "critical" | "high" | "medium" | "low",
-      "category": "bug" | "security" | "performance" | "style" | "suggestion",
-      "message": "What the issue is",
-      "suggestion": "How to fix it (optional)"
-    }
-  ]
-}
+4. Give specific, actionable feedback referencing exact file paths and line numbers from the diff
 
 Severity guide:
 - critical: Security vulnerabilities, data loss, crashes
@@ -61,7 +51,7 @@ Severity guide:
 - medium: Should be fixed but won't break things
 - low: Style issues, minor improvements
 
-Be concise but specific. Reference exact line numbers from the diff.`;
+Be concise but specific.`;
 
 export async function reviewCode(
   prTitle: string,
@@ -89,24 +79,21 @@ export async function reviewCode(
 **Changes:**
 ${diffContent}`;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.3,
-    max_tokens: 2000,
+  // Structured outputs: Claude is constrained to the Zod schema and the SDK
+  // validates the response (stripping unsupported constraints like riskScore
+  // min/max and re-checking them client-side).
+  const response = await getClient().messages.parse({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userPrompt }],
+    output_config: { format: zodOutputFormat(ReviewResultSchema) },
   });
 
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("No response from AI");
+  const result = response.parsed_output;
+  if (!result) {
+    throw new Error("No structured review returned from Claude");
   }
 
-  const parsed = JSON.parse(content);
-  const validated = ReviewResultSchema.parse(parsed);
-
-  return validated;
+  return result;
 }

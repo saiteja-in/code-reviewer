@@ -21,8 +21,19 @@ export const reviewPR = inngest.createFunction(
   {
     id: "review-pr",
     retries: 2,
+    // Inngest v4: triggers live in the config object.
+    triggers: [{ event: "review/pr.requested" }],
+    // Runs only after all retries are exhausted. Without this, a thrown step
+    // (GitHub/AI failure) would leave the review stuck in PROCESSING forever.
+    onFailure: async ({ event, error }) => {
+      const reviewId = (event.data.event.data as ReviewPREvent["data"])
+        .reviewId;
+      await db.review.update({
+        where: { id: reviewId },
+        data: { status: "FAILED", error: error.message || "Review failed" },
+      });
+    },
   },
-  { event: "review/pr.requested" },
   async ({ event, step }) => {
     const { reviewId, repositoryId, prNumber, userId } = event.data;
 
