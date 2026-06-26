@@ -337,7 +337,7 @@ function StatusIcon({
       return (
         <Loader2
           className={cn(
-            "text-blue-600 dark:text-blue-400 animate-spin",
+            "text-blue-600 dark:text-blue-400",
             className,
           )}
         />
