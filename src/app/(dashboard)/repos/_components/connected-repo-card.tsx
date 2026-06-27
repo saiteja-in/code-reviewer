@@ -29,10 +29,27 @@ export function ConnectedRepoCard({ repo }: { repo: ConnectedRepo }) {
                 <span className="font-medium block truncate group-hover:text-primary transition-colors">
                   {repo.fullName}
                 </span>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <Badge variant="outline" className="text-xs px-1.5 py-0 h-5">
                     {repo.private ? "Private" : "Public"}
                   </Badge>
+                  {repo.webhookId != null && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs px-1.5 py-0 h-5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
+                    >
+                      Webhook active
+                    </Badge>
+                  )}
+                  {repo.webhookError && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs px-1.5 py-0 h-5 border-amber-500/30 text-amber-700 dark:text-amber-400"
+                      title={repo.webhookError}
+                    >
+                      Webhook pending
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>

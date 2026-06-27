@@ -45,6 +45,8 @@ Your review should:
 3. Assign a risk score (0-100) based on the complexity and potential issues
 4. Give specific, actionable feedback referencing exact file paths and line numbers from the diff
 
+Line numbers must be the **new-file line number** (RIGHT side) as shown in the diff hunk headers (e.g. after @@ -old +NEW @@). Only reference lines that appear in the changed hunks.
+
 Severity guide:
 - critical: Security vulnerabilities, data loss, crashes
 - high: Bugs that will cause issues in production

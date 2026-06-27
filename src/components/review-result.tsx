@@ -21,7 +21,8 @@ import {
   CircleDot,
   ShieldCheck,
   ShieldAlert,
-  ShieldX,
+  ExternalLink,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +44,9 @@ interface ReviewResultProps {
     comments: ReviewComment[] | unknown;
     error: string | null;
     createdAt: Date;
+    githubReviewUrl?: string | null;
+    postedAt?: Date | null;
+    postError?: string | null;
   };
 }
 
@@ -168,6 +172,8 @@ export function ReviewResult({ review }: ReviewResultProps) {
 
   return (
     <div className="space-y-6">
+      <GitHubPostStatus review={review} />
+
       <Card className="overflow-hidden">
         <CardContent className="p-6 space-y-6">
           <RiskScoreSection score={review.riskScore ?? 0} />
@@ -603,4 +609,60 @@ function getCategoryIcon(category?: string) {
     default:
       return CircleDot;
   }
+}
+
+function GitHubPostStatus({
+  review,
+}: {
+  review: ReviewResultProps["review"];
+}) {
+  if (review.postedAt && review.githubReviewUrl) {
+    return (
+      <div className="flex items-center gap-2 flex-wrap">
+        <Badge
+          variant="outline"
+          className="gap-1.5 border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+        >
+          <CheckCircle2 className="size-3.5" />
+          Posted to GitHub
+        </Badge>
+        <a
+          href={review.githubReviewUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          View on GitHub
+          <ExternalLink className="size-3.5" />
+        </a>
+      </div>
+    );
+  }
+
+  if (review.postError) {
+    return (
+      <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm">
+        <AlertCircle className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-medium text-amber-800 dark:text-amber-300">
+            Could not post to GitHub
+          </p>
+          <p className="text-muted-foreground mt-0.5 text-xs">
+            {review.postError}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (review.status === "COMPLETED" && !review.postedAt) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Clock className="size-4 animate-pulse" />
+        Posting review to GitHub…
+      </div>
+    );
+  }
+
+  return null;
 }

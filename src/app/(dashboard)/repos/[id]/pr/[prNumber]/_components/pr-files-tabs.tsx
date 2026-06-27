@@ -41,8 +41,13 @@ export function PrFilesTabs({
       initialData: initialLatestReview,
       // Poll while the background job runs, then stop.
       refetchInterval: (query) => {
-        const status = query.state.data?.status;
-        return status === "PENDING" || status === "PROCESSING" ? 2000 : false;
+        const data = query.state.data;
+        const status = data?.status;
+        const postingPending =
+          status === "COMPLETED" && !data?.postedAt && !data?.postError;
+        return status === "PENDING" || status === "PROCESSING" || postingPending
+          ? 2000
+          : false;
       },
     },
   );

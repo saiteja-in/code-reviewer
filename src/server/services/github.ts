@@ -1,4 +1,51 @@
-import { db } from '@/server/db'
+import { db } from "@/server/db";
+import type { GitHubInlineComment } from "@/server/services/diff-line-mapper";
+
+const GITHUB_API_VERSION = "2022-11-28";
+
+export class GitHubApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly body?: string,
+  ) {
+    super(message);
+    this.name = "GitHubApiError";
+  }
+}
+
+function githubHeaders(accessToken: string): HeadersInit {
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": GITHUB_API_VERSION,
+  };
+}
+
+async function githubFetch(
+  accessToken: string,
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      ...githubHeaders(accessToken),
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => undefined);
+    throw new GitHubApiError(
+      `GitHub API error: ${response.status}`,
+      response.status,
+      body,
+    );
+  }
+
+  return response;
+}
 
 export interface GitHubPullRequestFile {
   sha: string;
@@ -292,4 +339,172 @@ export async function fetchPullRequestFiles(
   }
 
   return files;
+}
+
+export interface PostedPullRequestReview {
+  id: number;
+  html_url: string;
+}
+
+export async function postPullRequestReview(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  input: {
+    commitId: string;
+    body: string;
+    comments: GitHubInlineComment[];
+  },
+): Promise<PostedPullRequestReview> {
+  const response = await githubFetch(
+    accessToken,
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/reviews`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        commit_id: input.commitId,
+        body: input.body,
+        event: "COMMENT",
+        comments: input.comments.map((c) => ({
+          path: c.path,
+          line: c.line,
+          side: c.side,
+          body: c.body,
+        })),
+      }),
+    },
+  );
+
+  const data = (await response.json()) as PostedPullRequestReview;
+  return data;
+}
+
+export async function createCommitStatus(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  sha: string,
+  input: {
+    state: "success" | "failure" | "pending" | "error";
+    description: string;
+    context?: string;
+    targetUrl?: string;
+  },
+): Promise<void> {
+  await githubFetch(
+    accessToken,
+    `https://api.github.com/repos/${owner}/${repo}/statuses/${sha}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        state: input.state,
+        description: input.description.slice(0, 140),
+        context: input.context ?? "ai-code-review",
+        target_url: input.targetUrl,
+      }),
+    },
+  );
+}
+
+export interface GitHubWebhook {
+  id: number;
+  url: string;
+  active: boolean;
+  config: { url?: string; content_type?: string };
+}
+
+export async function listRepoWebhooks(
+  accessToken: string,
+  owner: string,
+  repo: string,
+): Promise<GitHubWebhook[]> {
+  const response = await githubFetch(
+    accessToken,
+    `https://api.github.com/repos/${owner}/${repo}/hooks`,
+  );
+  return (await response.json()) as GitHubWebhook[];
+}
+
+export async function createRepoWebhook(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  input: { url: string; secret: string },
+): Promise<GitHubWebhook> {
+  const response = await githubFetch(
+    accessToken,
+    `https://api.github.com/repos/${owner}/${repo}/hooks`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "web",
+        active: true,
+        events: ["pull_request"],
+        config: {
+          url: input.url,
+          content_type: "json",
+          secret: input.secret,
+        },
+      }),
+    },
+  );
+
+  return (await response.json()) as GitHubWebhook;
+}
+
+export async function deleteRepoWebhook(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  hookId: bigint | number,
+): Promise<void> {
+  await githubFetch(
+    accessToken,
+    `https://api.github.com/repos/${owner}/${repo}/hooks/${hookId}`,
+    { method: "DELETE" },
+  );
+}
+
+export function getWebhookUrl(): string {
+  const base = process.env.NEXT_PUBLIC_APP_URL;
+  if (!base) {
+    throw new Error("NEXT_PUBLIC_APP_URL is not set");
+  }
+  return `${base.replace(/\/$/, "")}/api/webhooks/github`;
+}
+
+export async function ensureRepoWebhook(
+  accessToken: string,
+  owner: string,
+  repo: string,
+): Promise<{ webhookId: bigint } | { error: string }> {
+  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  if (!secret) {
+    return { error: "GITHUB_WEBHOOK_SECRET is not configured" };
+  }
+
+  const webhookUrl = getWebhookUrl();
+
+  try {
+    const hooks = await listRepoWebhooks(accessToken, owner, repo);
+    const existing = hooks.find((h) => h.config?.url === webhookUrl);
+    if (existing) {
+      return { webhookId: BigInt(existing.id) };
+    }
+
+    const created = await createRepoWebhook(accessToken, owner, repo, {
+      url: webhookUrl,
+      secret,
+    });
+    return { webhookId: BigInt(created.id) };
+  } catch (err) {
+    if (err instanceof GitHubApiError) {
+      return { error: `${err.status}: ${err.message}` };
+    }
+    throw err;
+  }
 }

@@ -5,7 +5,16 @@ import {
   fetchPullRequest,
   fetchPullRequestFiles,
   getGitHubAccessToken,
+  postPullRequestReview,
+  createCommitStatus,
+  GitHubApiError,
 } from "@/server/services/github";
+import { mapInlineComments } from "@/server/services/diff-line-mapper";
+import {
+  buildReviewBody,
+  buildInlineCommentBody,
+  statusFromReview,
+} from "@/server/services/review-format";
 
 export type ReviewPREvent = {
   name: "review/pr.requested";
@@ -17,14 +26,19 @@ export type ReviewPREvent = {
   };
 };
 
+interface PostToGithubResult {
+  success: boolean;
+  githubReviewId?: bigint;
+  githubReviewUrl?: string;
+  commitStatusSha?: string;
+  postError?: string;
+}
+
 export const reviewPR = inngest.createFunction(
   {
     id: "review-pr",
     retries: 2,
-    // Inngest v4: triggers live in the config object.
     triggers: [{ event: "review/pr.requested" }],
-    // Runs only after all retries are exhausted. Without this, a thrown step
-    // (GitHub/AI failure) would leave the review stuck in PROCESSING forever.
     onFailure: async ({ event, error }) => {
       const reviewId = (event.data.event.data as ReviewPREvent["data"])
         .reviewId;
@@ -124,6 +138,103 @@ export const reviewPR = inngest.createFunction(
       });
     });
 
-    return { success: true, reviewId };
+    const priorPostedCount = await step.run("count-prior-posted", async () => {
+      return db.review.count({
+        where: {
+          repositoryId,
+          prNumber,
+          id: { not: reviewId },
+          postedAt: { not: null },
+        },
+      });
+    });
+
+    const postResult = await step.run(
+      "post-to-github",
+      async (): Promise<PostToGithubResult> => {
+        const appBase = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+        const appPrUrl = appBase
+          ? `${appBase}/repos/${repositoryId}/pr/${prNumber}`
+          : undefined;
+
+        const { inline, offDiff } = mapInlineComments(
+          reviewResult.comments,
+          files.map((f) => ({ filename: f.filename, patch: f.patch })),
+          buildInlineCommentBody,
+        );
+
+        const body = buildReviewBody(reviewResult, {
+          offDiffComments: offDiff,
+          isRerun: priorPostedCount > 0,
+          appPrUrl,
+        });
+
+        try {
+          const posted = await postPullRequestReview(
+            accessToken,
+            owner,
+            repo,
+            prNumber,
+            {
+              commitId: pr.head.sha,
+              body,
+              comments: inline,
+            },
+          );
+
+          const status = statusFromReview(reviewResult);
+          await createCommitStatus(
+            accessToken,
+            owner,
+            repo,
+            pr.head.sha,
+            {
+              ...status,
+              targetUrl: appPrUrl,
+            },
+          );
+
+          return {
+            success: true,
+            githubReviewId: BigInt(posted.id),
+            githubReviewUrl: posted.html_url,
+            commitStatusSha: pr.head.sha,
+          };
+        } catch (err) {
+          const message =
+            err instanceof GitHubApiError
+              ? `${err.status}: ${err.message}${err.body ? ` — ${err.body.slice(0, 200)}` : ""}`
+              : err instanceof Error
+                ? err.message
+                : "Unknown error posting to GitHub";
+
+          // Non-fatal: analysis succeeded; don't rethrow for retries on 404/422.
+          if (
+            err instanceof GitHubApiError &&
+            (err.status === 404 || err.status === 422)
+          ) {
+            return { success: false, postError: message };
+          }
+
+          // Retry transient errors (rate limits, 5xx).
+          throw err;
+        }
+      },
+    );
+
+    await step.run("save-github-post", async () => {
+      await db.review.update({
+        where: { id: reviewId },
+        data: {
+          githubReviewId: postResult.githubReviewId ?? null,
+          githubReviewUrl: postResult.githubReviewUrl ?? null,
+          postedAt: postResult.success ? new Date() : null,
+          commitStatusSha: postResult.commitStatusSha ?? null,
+          postError: postResult.postError ?? null,
+        },
+      });
+    });
+
+    return { success: true, reviewId, postedToGithub: postResult.success };
   },
 );

@@ -40,7 +40,10 @@ export function ReviewsList({
       // Keep polling while any review is still in flight.
       refetchInterval: (query) => {
         const hasProcessing = query.state.data?.some(
-          (r) => r.status === "PENDING" || r.status === "PROCESSING",
+          (r) =>
+            r.status === "PENDING" ||
+            r.status === "PROCESSING" ||
+            (r.status === "COMPLETED" && !r.postedAt && !r.postError),
         );
         return hasProcessing ? 3000 : false;
       },
@@ -221,7 +224,7 @@ function ReviewCard({
                 </span>
               </div>
               {review.status === "COMPLETED" && (
-                <div className="flex items-center gap-4 pt-1">
+                <div className="flex items-center gap-4 pt-1 flex-wrap">
                   {review.riskScore !== null && (
                     <RiskScoreBadge score={review.riskScore} />
                   )}
@@ -230,6 +233,23 @@ function ReviewCard({
                       <AlertTriangle className="size-3.5" />
                       {commentCount}{" "}
                       {commentCount === 1 ? "comment" : "comments"}
+                    </span>
+                  )}
+                  {review.postedAt && review.githubReviewUrl && (
+                    <a
+                      href={review.githubReviewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:underline"
+                    >
+                      <CheckCircle className="size-3.5" />
+                      Posted to GitHub
+                    </a>
+                  )}
+                  {review.postError && (
+                    <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="size-3.5" />
+                      GitHub post failed
                     </span>
                   )}
                 </div>

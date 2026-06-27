@@ -8,7 +8,7 @@
 
 An **AI-powered GitHub code reviewer**. A user signs in, connects GitHub repositories, and the app reviews pull requests with an LLM (Claude). A review produces a **summary**, a **risk score (0–100)**, and **inline comments** (file, line, severity, category, message, optional fix). Reviews run as **durable background jobs** and are triggered either manually from the UI or automatically by a **GitHub webhook** when a PR opens/updates. Results show in a dashboard with live status.
 
-**Status:** core loop works end to end (connect → trigger/webhook → background job → Claude review → dashboard). The main thing not yet done: posting the review **back into the GitHub PR** (see `docs/roadmap/phase-1`).
+**Status:** core loop works end to end (connect → trigger/webhook → background job → Claude review → dashboard → **GitHub post-back**). Auto webhook registration on repo connect is implemented.
 
 ---
 
@@ -145,7 +145,7 @@ model Verification { id, identifier, value, expiresAt, ... }
 
 model Repository {
   id (cuid), userId → User, githubId (unique Int), name, fullName ("owner/repo"),
-  private (bool), htmlUrl, createdAt, updatedAt
+  private (bool), htmlUrl, webhookId? (BigInt), webhookError?, createdAt, updatedAt
   reviews[]
 }
 model Review {
@@ -153,6 +153,7 @@ model Review {
   prNumber (Int), prTitle, prUrl,
   status: ReviewStatus (default PENDING),
   summary? (Text), riskScore? (Int), comments? (Json), error? (Text),
+  githubReviewId? (BigInt), githubReviewUrl?, postedAt?, commitStatusSha?, postError?,
   createdAt, updatedAt
   @@index([repositoryId]) @@index([userId]) @@index([status])
 }
@@ -183,9 +184,9 @@ The stored GitHub **access token** (in `Account.accessToken`, `providerId === "g
 - Connect/list/disconnect GitHub repos; import panel (search + multi-select) fed by a live GitHub repo list.
 - Per-repo PR list (open/closed/all tabs, client-filtered) with +/− and changed-files stats via **one GraphQL query**.
 - PR detail: header (title, status, branches, stats, author), **Changed Files** tab (full diff viewer with expand/collapse/copy), **Reviews** tab.
-- AI review: **Run AI Review / Re-run** trigger; durable Inngest job; Claude Sonnet 4.6 structured review; live status; rich result (risk gauge, severity breakdown, summary, comment cards with suggested fixes).
-- `/reviews` global list with status filters, live polling, retry on failed.
-- GitHub **webhook** auto-trigger on `opened`/`synchronize`/`reopened` (HMAC-verified, skips drafts, dedups in-flight reviews).
+- AI review: **Run AI Review / Re-run** trigger; durable Inngest job; Claude Sonnet 4.6 structured review; live status; rich result (risk gauge, severity breakdown, summary, comment cards with suggested fixes); **posts PR review + inline comments + commit status to GitHub**.
+- `/reviews` global list with status filters, live polling, retry on failed; **Posted to GitHub** indicator.
+- GitHub **webhook** auto-trigger on `opened`/`synchronize`/`reopened` (HMAC-verified, skips drafts, dedups in-flight reviews); **auto-registered on repo connect** via Inngest `repo/connected`.
 
 ---
 
@@ -210,6 +211,8 @@ UI "Run AI Review" (review.trigger)  OR  GitHub webhook (opened/sync/reopened)
              step: fetch PR files + PR metadata (GitHub)
              step: reviewCode(...)  → Claude Sonnet 4.6 structured output
              step: status → COMPLETED { summary, riskScore, comments }
+             step: post-to-github → PR review + commit status on head.sha
+             step: save-github-post { githubReviewId, githubReviewUrl, postedAt, postError? }
              onFailure (after retries): status → FAILED { error }
    → UI polls review.getLatestForPR (PR page, 2s) / review.list (/reviews, 3s) while PENDING|PROCESSING
    → renders <ReviewResult /> when COMPLETED
@@ -267,7 +270,7 @@ All are `protectedProcedure` and scoped to `ctx.user.id`.
 - `fetchPullRequestsGraphQL(token, owner, repo)` — **one** GraphQL query returning PRs with `additions/deletions/changedFiles`, author, branches, state (OPEN/CLOSED/MERGED → mapped to open/closed + mergedAt). Avoids the REST 1+N.
 - `fetchPullRequest(token, owner, repo, prNumber)` — REST single PR (includes stats + `head.sha`).
 - `fetchPullRequestFiles(token, owner, repo, prNumber)` — paginated REST files (with `patch`).
-- **No write helpers yet** (posting reviews/statuses is Phase 1 in the roadmap).
+- **No write helpers yet** → **implemented:** `postPullRequestReview`, `createCommitStatus`, `ensureRepoWebhook`, webhook CRUD.
 
 ---
 
@@ -283,10 +286,10 @@ All are `protectedProcedure` and scoped to `ctx.user.id`.
 
 ---
 
-## 15. What's NOT done yet (gaps) → see `docs/roadmap/`
+## 15. What's NOT done yet (gaps) → see `docs/`
 
-- **Posting reviews back to GitHub** (inline comments + summary + commit status) — Phase 1.
-- Auto-registering webhooks on connect — Phase 1.
+- ~~**Posting reviews back to GitHub**~~ — **done (Phase 1)**.
+- ~~**Auto-registering webhooks on connect**~~ — **done (Phase 1)**.
 - Noise/confidence gating, codebase-aware context (pgvector), per-repo `.aicodereview.yml` — Phase 2.
 - In-PR chat/commands, one-click fix suggestions, incremental re-review — Phase 3.
 - GitHub App (+ Check Runs gating), analytics & settings, notifications, cost/model tiering, Inngest realtime — Phase 4.

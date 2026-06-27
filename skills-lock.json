@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "skills": {
+    "inngest-agents": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-agents/SKILL.md",
+      "computedHash": "af9784c6bebb25ce789ca6780c098221f89cb4b1670f70335714ce5aa7f7d7e1"
+    },
+    "inngest-api": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-api/SKILL.md",
+      "computedHash": "e455106b9f5e4e7b4cbacb2f021fff4f96acc065bc926acb5355b4554518cd4a"
+    },
+    "inngest-api-cli": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-api-cli/SKILL.md",
+      "computedHash": "5b68dbfa9f024511776c2a993fd87d3481412c0ecbd36f33b24466c5f9fa4727"
+    },
+    "inngest-brownfield-audit": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-brownfield-audit/SKILL.md",
+      "computedHash": "e467b495ca263e4065db42a5183daa3d250d5c7e30ca0a7375cf55bdd82783db"
+    },
+    "inngest-cli": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-cli/SKILL.md",
+      "computedHash": "f4c61514acd17f1af427cebee40da6e61214c51ff956b2dd4195d967fae543ec"
+    },
+    "inngest-durable-functions": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-durable-functions/SKILL.md",
+      "computedHash": "f3f5117f8a54bd9716c51b94bf78b0a6890b81c5ebbcf09644376a027ba6894c"
+    },
+    "inngest-events": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-events/SKILL.md",
+      "computedHash": "4fc14cc79c44b9045062e61646adf3a193fa4eb2cb808601f3bd5b2da0ee46ba"
+    },
+    "inngest-flow-control": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-flow-control/SKILL.md",
+      "computedHash": "1398bbedd62ce2ff72c50338ea0dfeaf5985f73f88c6bc69e9d7d204b7bc841c"
+    },
+    "inngest-middleware": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-middleware/SKILL.md",
+      "computedHash": "7addf27d08140583083211e0143a95d18280dcd2700d588edda339019d2e7a47"
+    },
+    "inngest-realtime": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-realtime/SKILL.md",
+      "computedHash": "a55f60fb8994dfb135821f6748722ecb47062e45dfdc23844acca352ae2df02b"
+    },
+    "inngest-setup": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-setup/SKILL.md",
+      "computedHash": "9ebc8eb4c36aab7a6eef83c59a2bf8841cf83a01f29b37686d3198fa82d6efb0"
+    },
+    "inngest-steps": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-steps/SKILL.md",
+      "computedHash": "e1e5fe474150b63e571dda5e030b1b4eb6b630ff20cd7e2e59812e70825d64c6"
+    },
+    "inngest-v3-v4-migration": {
+      "source": "inngest/inngest-skills",
+      "sourceType": "github",
+      "skillPath": "skills/inngest-v3-v4-migration/SKILL.md",
+      "computedHash": "6f24b9c0f79cab5213f60715f8876eadbe43301d373b8276a305607aba356037"
+    },
+    "next-cache-components-adoption": {
+      "source": "vercel/next.js",
+      "sourceType": "github",
+      "skillPath": "skills/next-cache-components-adoption/SKILL.md",
+      "computedHash": "a080096dcaf684bbcc81516892c204c4ec370e26b84c3e18f6200c785631bad0"
+    },
+    "next-cache-components-optimizer": {
+      "source": "vercel/next.js",
+      "sourceType": "github",
+      "skillPath": "skills/next-cache-components-optimizer/SKILL.md",
+      "computedHash": "b8d757a1fe10ebe7b10de1d5ee83f9bcdbd1de1e1147efc68cf249377f471067"
+    },
+    "next-dev-loop": {
+      "source": "vercel/next.js",
+      "sourceType": "github",
+      "skillPath": "skills/next-dev-loop/SKILL.md",
+      "computedHash": "aad97b32ba6efd31e92d063ec77120a694fe0d4a9401daf9af4c205cd5e21b07"
+    },
+    "prisma-cli": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-cli/SKILL.md",
+      "computedHash": "f41a5af7f25a686631a0e2a8b7031f3c57e0e06b81932f6389736d930d05fa54"
+    },
+    "prisma-client-api": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-client-api/SKILL.md",
+      "computedHash": "7825288518e0722b497de03367a1aee477fc61b0b488d456b9b6257294c005ae"
+    },
+    "prisma-compute": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-compute/SKILL.md",
+      "computedHash": "95681ee810ef556dd65656b7504677cb9024386eecacd8460b0d285e79c65a54"
+    },
+    "prisma-database-setup": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-database-setup/SKILL.md",
+      "computedHash": "0d6f44ac34b1ed3f8ed2970ecf90483d0f658fd1d204458f62bfefa28f31b095"
+    },
+    "prisma-driver-adapter-implementation": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-driver-adapter-implementation/SKILL.md",
+      "computedHash": "86034220752575ac0551aa3d579ed0bdfb90616000ae5703bf11e47b655ec7d1"
+    },
+    "prisma-postgres": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-postgres/SKILL.md",
+      "computedHash": "fd8f16f26e2cce1dd3e8e7916dcddbffddf295003eba86141f53e9d2d9d2bc0c"
+    },
+    "prisma-postgres-setup": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-postgres-setup/SKILL.md",
+      "computedHash": "c89d3aa91285d8e4964fcaa5238c99a3d3c20b617e032e731cf632330a85a5a6"
+    },
+    "prisma-upgrade-v7": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-upgrade-v7/SKILL.md",
+      "computedHash": "075d1fc3156d5593c3e9a559ebb07f82a2991db07125ff9df16ad90270f5c584"
+    },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "0dc0edeeaec2ae491ae506806517866a3f9bd48d04e0458feb37e0252862891f"
+    }
+  }
+}
