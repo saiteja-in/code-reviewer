@@ -5,16 +5,82 @@ export const RISK_FAIL_THRESHOLD = 75;
 
 const SEVERITY_ORDER = ["critical", "high", "medium", "low"] as const;
 
-export function buildInlineCommentBody(comment: ReviewComment): string {
-  const severityLabel = comment.severity.toUpperCase();
-  const categoryLabel = comment.category ? ` · ${comment.category}` : "";
-  let body = `**${severityLabel}${categoryLabel}**\n\n${comment.message}`;
+const PRIORITY_LABEL: Record<ReviewComment["severity"], string> = {
+  critical: "P0",
+  high: "P1",
+  medium: "P2",
+  low: "P3",
+};
 
-  if (comment.suggestion) {
-    body += `\n\n**Suggestion:**\n\`\`\`\n${comment.suggestion}\n\`\`\``;
+const CATEGORY_LABEL: Record<ReviewComment["category"], string> = {
+  bug: "Bug",
+  security: "Security",
+  performance: "Performance",
+  style: "Style",
+  suggestion: "Suggestion",
+};
+
+const PRIORITY_SORT: Record<ReviewComment["severity"], number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+function priorityLabel(severity: ReviewComment["severity"]): string {
+  return PRIORITY_LABEL[severity];
+}
+
+function categoryLabel(category: ReviewComment["category"]): string {
+  return CATEGORY_LABEL[category];
+}
+
+function truncate(text: string, max: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max - 1).trimEnd()}…`;
+}
+
+function firstSentence(text: string): string {
+  const match = text.trim().match(/^[^.!?\n]+[.!?]?/);
+  return match ? match[0].trim() : text.trim();
+}
+
+function commentTitle(comment: ReviewComment): string {
+  if (comment.title?.trim()) return truncate(comment.title.trim(), 80);
+  return truncate(firstSentence(comment.message), 80);
+}
+
+function commentDetail(comment: ReviewComment, title: string): string {
+  if (comment.title?.trim()) return comment.message.trim();
+  const derived = firstSentence(comment.message);
+  if (derived === comment.message.trim()) return "";
+  return comment.message.trim();
+}
+
+function wrapSuggestionFence(code: string): string {
+  const needsFourTicks = code.includes("```");
+  if (needsFourTicks) {
+    return `\`\`\`\`suggestion\n${code}\n\`\`\`\``;
+  }
+  return `\`\`\`suggestion\n${code}\n\`\`\``;
+}
+
+export function buildInlineCommentBody(comment: ReviewComment): string {
+  const title = commentTitle(comment);
+  const detail = commentDetail(comment, title);
+  const header = `**${priorityLabel(comment.severity)} · ${categoryLabel(comment.category)}** — ${title}`;
+
+  const parts: string[] = [header];
+  if (detail) parts.push(detail);
+  if (comment.impact?.trim()) {
+    parts.push(`**Why it matters:** ${comment.impact.trim()}`);
+  }
+  if (comment.suggestion?.trim()) {
+    parts.push(wrapSuggestionFence(comment.suggestion.trim()));
   }
 
-  return body;
+  return parts.join("\n\n");
 }
 
 function countBySeverity(comments: ReviewComment[]): Record<string, number> {
@@ -32,50 +98,98 @@ function countBySeverity(comments: ReviewComment[]): Record<string, number> {
   return counts;
 }
 
-function verdictFromReview(review: ReviewResult): string {
+function walkthroughSummaryLine(review: ReviewResult): string {
   const counts = countBySeverity(review.comments);
-  if (counts.critical > 0) {
-    return `⚠️ **${counts.critical} critical** issue(s) found — address before merge.`;
+  const p0 = counts.critical;
+  const p1 = counts.high;
+
+  if (p0 > 0) {
+    const label = p0 === 1 ? "1 P0 issue" : `${p0} P0 issues`;
+    return `⚠️ ${label} — address before merge`;
   }
-  if (counts.high > 0) {
-    return `⚠️ **${counts.high} high** severity issue(s) found.`;
+  if (p1 > 0) {
+    const label = p1 === 1 ? "1 P1 issue" : `${p1} P1 issues`;
+    return `⚠️ ${label} found`;
   }
   if (review.riskScore >= RISK_FAIL_THRESHOLD) {
-    return `⚠️ Risk score **${review.riskScore}/100** exceeds threshold (${RISK_FAIL_THRESHOLD}).`;
+    return `⚠️ Risk **${review.riskScore}/100** exceeds threshold`;
   }
   if (review.comments.length === 0) {
-    return "✅ No issues found.";
+    return "✅ No issues found";
   }
-  return `✅ Review complete — ${review.comments.length} finding(s), risk **${review.riskScore}/100**.`;
+  return `✅ ${review.comments.length} finding(s) — risk **${review.riskScore}/100**`;
 }
 
-function severityTable(comments: ReviewComment[]): string {
+function actionRequiredTable(comments: ReviewComment[]): string {
+  const actionable = comments
+    .filter((c) => c.severity === "critical" || c.severity === "high")
+    .sort((a, b) => {
+      const p = PRIORITY_SORT[a.severity] - PRIORITY_SORT[b.severity];
+      if (p !== 0) return p;
+      const fileCmp = a.file.localeCompare(b.file);
+      if (fileCmp !== 0) return fileCmp;
+      return a.line - b.line;
+    });
+
+  if (actionable.length === 0) return "";
+
+  const rows = actionable.map((c) => {
+    const issue = commentTitle(c);
+    return `| ${priorityLabel(c.severity)} | \`${c.file}:${c.line}\` | ${issue} |`;
+  });
+
+  return `### Action required\n\n| Priority | Location | Issue |\n| --- | --- | --- |\n${rows.join("\n")}`;
+}
+
+function findingsOverviewTable(comments: ReviewComment[]): string {
   const counts = countBySeverity(comments);
   const rows = SEVERITY_ORDER.filter((s) => counts[s] > 0).map(
-    (s) => `| ${s} | ${counts[s]} |`,
+    (s) => `| ${priorityLabel(s)} | ${counts[s]} |`,
   );
 
   if (rows.length === 0) return "";
 
-  return `### Findings by severity\n\n| Severity | Count |\n| --- | --- |\n${rows.join("\n")}`;
+  return `### Findings overview\n\n| Priority | Count |\n| --- | --- |\n${rows.join("\n")}`;
+}
+
+function offDiffReasonText(reason: OffDiffComment["reason"]): string {
+  return reason === "file_not_in_pr" ? "file not in PR" : "line not in diff";
 }
 
 function formatOffDiffSection(offDiff: OffDiffComment[]): string {
   if (offDiff.length === 0) return "";
 
   const lines = offDiff.map((c) => {
-    const reason =
-      c.reason === "file_not_in_pr"
-        ? "file not in PR"
-        : "line not in diff";
-    let text = `- **\`${c.file}:${c.line}\`** (${c.severity}) — ${c.message} _(${reason})_`;
-    if (c.suggestion) {
-      text += `\n  - Suggestion: \`${c.suggestion}\``;
+    const title = commentTitle(c);
+    const reason = offDiffReasonText(c.reason);
+    let text = `- **${priorityLabel(c.severity)} · \`${c.file}:${c.line}\`** — ${title} _(${reason})_`;
+    const detail = commentDetail(c, title);
+    if (detail) text += `\n  ${detail}`;
+    if (c.suggestion?.trim()) {
+      text += `\n\n  \`\`\`\n  ${c.suggestion.trim()}\n  \`\`\``;
     }
     return text;
   });
 
-  return `### Additional findings (not posted inline)\n\n${lines.join("\n")}`;
+  return `### Additional findings (not on diff)\n\n${lines.join("\n\n")}`;
+}
+
+function buildWalkthroughContent(
+  review: ReviewResult,
+  offDiffComments: OffDiffComment[],
+): string {
+  const parts: string[] = [`### Summary\n\n${review.summary}`];
+
+  const action = actionRequiredTable(review.comments);
+  if (action) parts.push(action);
+
+  const overview = findingsOverviewTable(review.comments);
+  if (overview) parts.push(overview);
+
+  const offDiff = formatOffDiffSection(offDiffComments);
+  if (offDiff) parts.push(offDiff);
+
+  return parts.join("\n\n");
 }
 
 export interface BuildReviewBodyOptions {
@@ -91,22 +205,15 @@ export function buildReviewBody(
   const { offDiffComments = [], isRerun = false, appPrUrl } = options;
   const parts: string[] = [];
 
-  if (isRerun) {
-    parts.push(
-      `## AI Code Review (re-run @ ${new Date().toISOString()})`,
-    );
-  } else {
-    parts.push("## AI Code Review");
-  }
+  const summaryLine = walkthroughSummaryLine(review);
+  const walkthroughTitle = isRerun
+    ? `<strong>AI Code Review</strong> (re-run) — ${summaryLine}`
+    : `<strong>AI Code Review</strong> — ${summaryLine}`;
 
-  parts.push(verdictFromReview(review));
-  parts.push(`### Summary\n\n${review.summary}`);
-
-  const table = severityTable(review.comments);
-  if (table) parts.push(table);
-
-  const offDiff = formatOffDiffSection(offDiffComments);
-  if (offDiff) parts.push(offDiff);
+  const walkthrough = buildWalkthroughContent(review, offDiffComments);
+  parts.push(
+    `<details>\n<summary>${walkthroughTitle}</summary>\n\n${walkthrough}\n</details>`,
+  );
 
   if (appPrUrl) {
     parts.push(`[View full review in dashboard](${appPrUrl})`);

@@ -16,7 +16,9 @@ export const ReviewCommentSchema = z.object({
   line: z.number(),
   severity: z.enum(["critical", "high", "medium", "low"]),
   category: z.enum(["bug", "security", "performance", "style", "suggestion"]),
+  title: z.string().optional(),
   message: z.string(),
+  impact: z.string().optional(),
   suggestion: z.string().optional(),
 });
 
@@ -48,10 +50,16 @@ Your review should:
 Line numbers must be the **new-file line number** (RIGHT side) as shown in the diff hunk headers (e.g. after @@ -old +NEW @@). Only reference lines that appear in the changed hunks.
 
 Severity guide:
-- critical: Security vulnerabilities, data loss, crashes
-- high: Bugs that will cause issues in production
-- medium: Should be fixed but won't break things
-- low: Style issues, minor improvements
+- critical (P0): Security vulnerabilities, data loss, crashes — must fix before merge
+- high (P1): Bugs that will cause issues in production — should fix
+- medium (P2): Should be fixed but won't break things
+- low (P3): Style issues, minor improvements
+
+For each comment:
+- title: Short scannable headline (max ~80 chars) — what is wrong, not how to fix
+- message: Detailed explanation with specifics from the diff
+- impact: One sentence on consequence or risk; omit for trivial style nits
+- suggestion: ONLY literal code that replaces the line at file:line for a one-click GitHub fix. No prose, no markdown fences inside. Omit if the fix is architectural, spans multiple hunks, or you are unsure of the exact replacement text.
 
 Be concise but specific.`;
 
