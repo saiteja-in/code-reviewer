@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { inngest } from "@/server/inngest";
-import { removeRepoWebhookBestEffort } from "@/server/inngest/functions/register-repo-webhook";
 import {
   fetchGitHubRepos,
   getGitHubAccessToken,
@@ -96,18 +94,6 @@ export const repositoryRouter = createTRPCRouter({
         ),
       );
 
-      await Promise.all(
-        result.map((repository) =>
-          inngest.send({
-            name: "repo/connected",
-            data: {
-              repositoryId: repository.id,
-              userId: ctx.user.id,
-            },
-          }),
-        ),
-      );
-
       return { connected: result.length };
     }),
 
@@ -123,15 +109,6 @@ export const repositoryRouter = createTRPCRouter({
           code: "NOT_FOUND",
           message: "Repository not found",
         });
-      }
-
-      const accessToken = await getGitHubAccessToken(ctx.user.id);
-      if (accessToken && repository.webhookId) {
-        await removeRepoWebhookBestEffort(
-          accessToken,
-          repository.fullName,
-          repository.webhookId,
-        );
       }
 
       await ctx.db.repository.delete({
