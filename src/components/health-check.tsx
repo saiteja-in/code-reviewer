@@ -16,8 +16,17 @@ export function HealthCheck() {
   }
 
   return (
-    <Badge variant="secondary">
-      API: {data?.status} {data?.timestamps}
-    </Badge>
+    <div className="flex flex-wrap items-center gap-2">
+      <Badge variant="secondary">
+        API: {data?.status} {data?.timestamps}
+      </Badge>
+      {data?.neo4j?.status === "ok" ? (
+        <Badge variant="secondary">Neo4j: ok</Badge>
+      ) : data?.neo4j ? (
+        <Badge variant="destructive" title={data.neo4j.error ?? undefined}>
+          Neo4j: {data.neo4j.configured ? "unreachable" : "not configured"}
+        </Badge>
+      ) : null}
+    </div>
   );
 }

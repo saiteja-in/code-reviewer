@@ -73,6 +73,28 @@ docker compose exec neo4j cypher-shell -u neo4j -p password123 "SHOW CONSTRAINTS
 # Verify indexes (expect repoId, name, path indexes):
 docker compose exec neo4j cypher-shell -u neo4j -p password123 "SHOW INDEXES"
 
+# --- Step 5: Neo4j driver + health probe ---
+pnpm install
+
+# Ensure .env has:
+# NEO4J_URI=bolt://localhost:7687
+# NEO4J_USER=neo4j
+# NEO4J_PASSWORD=password123
+
+pnpm dev
+# In another terminal:
+curl http://localhost:3000/api/health/neo4j
+# Expected (Neo4j up): {"status":"ok","neo4j":"connected"}
+
+# Stop Neo4j to test graceful failure:
+# docker compose stop neo4j
+# curl http://localhost:3000/api/health/neo4j
+# Expected: 503 with error message; rest of app still loads.
+
+# Optional: uncomment <HealthCheck /> on src/app/(public)/page.tsx to see badges in UI.
+
+pnpm build
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6
