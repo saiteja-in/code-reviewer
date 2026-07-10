@@ -248,6 +248,19 @@ pnpm send:index-event -- YOUR_REPOSITORY_CUID
 # Verify indexStatus flipped:
 docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT id, "fullName", "indexStatus", "indexedCommit" FROM "Repository";'
 
+# --- Step 14: Webhook index triggers (push + PR sync) ---
+pnpm test
+
+# GitHub App must subscribe to: push, pull_request (see github-app-setup.md)
+# Push to default branch → IndexJob + repo/index.requested
+# PR opened/synchronize → index PR head + review (index before review)
+
+# After push to default branch on connected repo:
+docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT id, status, "headCommit", branch, "createdAt" FROM "IndexJob" ORDER BY "createdAt" DESC LIMIT 5;'
+
+# After PR sync, headCommit should match PR head SHA:
+docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT r."fullName", ij."headCommit", ij.branch, ij.status FROM "IndexJob" ij JOIN "Repository" r ON r.id = ij."repositoryId" ORDER BY ij."createdAt" DESC LIMIT 5;'
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6

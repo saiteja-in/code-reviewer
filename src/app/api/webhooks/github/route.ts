@@ -3,9 +3,14 @@ import { db } from "@/server/db";
 import { inngest } from "@/server/inngest";
 import {
   reviewModeFromEnv,
-  resolveReviewMode,
   verifyGitHubWebhook,
 } from "@/server/services/github-webhook";
+import {
+  branchFromRef,
+  isBranchDelete,
+  parseOwnerRepo,
+  requestRepoIndex,
+} from "@/server/services/github-webhook-index";
 import {
   deleteGitHubInstallation,
   ensureInstallationDbId,
@@ -15,6 +20,15 @@ import {
   type GitHubInstallationPayload,
   type GitHubRepoRefPayload,
 } from "@/server/services/github-webhook-installation";
+
+interface RepositoryPayload {
+  id: number;
+  full_name: string;
+  name: string;
+  private: boolean;
+  html_url: string;
+  default_branch?: string;
+}
 
 interface PullRequestPayload {
   action: string;
@@ -32,14 +46,15 @@ interface PullRequestPayload {
       ref: string;
     };
   };
-  repository: {
-    id: number;
-    full_name: string;
-    name: string;
-    private: boolean;
-    html_url: string;
-    default_branch?: string;
-  };
+  repository: RepositoryPayload;
+}
+
+interface PushPayload {
+  ref: string;
+  before: string;
+  after: string;
+  installation?: GitHubInstallationPayload;
+  repository: RepositoryPayload;
 }
 
 interface InstallationPayload {
@@ -53,6 +68,207 @@ interface InstallationRepositoriesPayload {
   installation: GitHubInstallationPayload;
   repositories_added?: GitHubRepoRefPayload[];
   repositories_removed?: GitHubRepoRefPayload[];
+}
+
+async function resolveConnectedRepository(githubRepoId: number) {
+  return db.repository.findUnique({
+    where: { githubId: githubRepoId },
+    include: { user: true, installation: true },
+  });
+}
+
+async function linkInstallationIfNeeded(
+  repository: NonNullable<Awaited<ReturnType<typeof resolveConnectedRepository>>>,
+  installation: GitHubInstallationPayload | undefined,
+  defaultBranch?: string,
+) {
+  if (!installation || repository.installationId) {
+    return repository;
+  }
+
+  const installationDbId = await ensureInstallationDbId(installation);
+  return db.repository.update({
+    where: { id: repository.id },
+    data: {
+      installationId: installationDbId,
+      defaultBranch: defaultBranch ?? repository.defaultBranch,
+    },
+    include: { user: true, installation: true },
+  });
+}
+
+async function handlePushEvent(payload: PushPayload) {
+  if (isBranchDelete(payload.after)) {
+    return NextResponse.json({ message: "Branch delete ignored" }, { status: 200 });
+  }
+
+  let repository = await resolveConnectedRepository(payload.repository.id);
+  if (!repository) {
+    return NextResponse.json(
+      { message: "Repository not connected" },
+      { status: 200 },
+    );
+  }
+
+  repository = await linkInstallationIfNeeded(
+    repository,
+    payload.installation,
+    payload.repository.default_branch,
+  );
+
+  const branch = branchFromRef(payload.ref);
+  if (branch !== repository.defaultBranch) {
+    return NextResponse.json(
+      { message: `Push to non-default branch '${branch}' ignored` },
+      { status: 200 },
+    );
+  }
+
+  const names = parseOwnerRepo(repository.fullName);
+  if (!names) {
+    return NextResponse.json(
+      { message: "Invalid repository name" },
+      { status: 200 },
+    );
+  }
+
+  const indexResult = await requestRepoIndex({
+    repositoryId: repository.id,
+    installationId:
+      payload.installation?.id ??
+      (repository.installation?.installationId
+        ? Number(repository.installation.installationId)
+        : null),
+    owner: names.owner,
+    repo: names.repo,
+    headSha: payload.after,
+    branch,
+    baseCommit: payload.before,
+  });
+
+  return NextResponse.json({
+    message: indexResult.queued ? "Index job queued" : indexResult.reason,
+    index: indexResult,
+  });
+}
+
+async function handlePullRequestEvent(payload: PullRequestPayload) {
+  if (!["opened", "synchronize", "reopened"].includes(payload.action)) {
+    return NextResponse.json(
+      { message: `Action '${payload.action}' ignored` },
+      { status: 200 },
+    );
+  }
+
+  if (payload.pull_request.draft) {
+    return NextResponse.json({ message: "Draft PR ignored" }, { status: 200 });
+  }
+
+  let repository = await resolveConnectedRepository(payload.repository.id);
+  if (!repository) {
+    return NextResponse.json(
+      { message: "Repository not connected" },
+      { status: 200 },
+    );
+  }
+
+  repository = await linkInstallationIfNeeded(
+    repository,
+    payload.installation,
+    payload.repository.default_branch,
+  );
+
+  const headSha = payload.pull_request.head.sha;
+  const branch = payload.pull_request.head.ref;
+  const mode = reviewModeFromEnv();
+  const names = parseOwnerRepo(repository.fullName);
+
+  let indexResult: Awaited<ReturnType<typeof requestRepoIndex>> | null = null;
+  if (names) {
+    indexResult = await requestRepoIndex({
+      repositoryId: repository.id,
+      installationId:
+        payload.installation?.id ??
+        (repository.installation?.installationId
+          ? Number(repository.installation.installationId)
+          : null),
+      owner: names.owner,
+      repo: names.repo,
+      headSha,
+      branch,
+    });
+  }
+
+  const existingReview = await db.review.findFirst({
+    where: {
+      repositoryId: repository.id,
+      prNumber: payload.pull_request.number,
+      status: { in: ["PENDING", "PROCESSING"] },
+    },
+  });
+
+  if (existingReview) {
+    return NextResponse.json(
+      {
+        message: "Review already in progress",
+        index: indexResult,
+      },
+      { status: 200 },
+    );
+  }
+
+  const duplicate = await db.review.findFirst({
+    where: {
+      repositoryId: repository.id,
+      prNumber: payload.pull_request.number,
+      headSha,
+      mode,
+      status: { not: "FAILED" },
+    },
+  });
+
+  if (duplicate) {
+    return NextResponse.json(
+      {
+        message: "Review already exists for this commit",
+        reviewId: duplicate.id,
+        index: indexResult,
+      },
+      { status: 200 },
+    );
+  }
+
+  const review = await db.review.create({
+    data: {
+      repositoryId: repository.id,
+      userId: repository.userId,
+      prNumber: payload.pull_request.number,
+      prTitle: payload.pull_request.title,
+      prUrl: payload.pull_request.html_url,
+      headSha,
+      mode,
+      status: "PENDING",
+    },
+  });
+
+  await inngest.send({
+    name: "review/pr.requested",
+    data: {
+      reviewId: review.id,
+      repositoryId: repository.id,
+      prNumber: payload.pull_request.number,
+      userId: repository.userId,
+      headSha,
+      mode,
+      installationId: payload.installation?.id ?? null,
+    },
+  });
+
+  return NextResponse.json({
+    message: "Review triggered",
+    reviewId: review.id,
+    index: indexResult,
+  });
 }
 
 async function handleInstallationEvent(payload: InstallationPayload) {
@@ -124,111 +340,6 @@ async function handleInstallationRepositoriesEvent(
   return NextResponse.json({ message: "Event ignored" }, { status: 200 });
 }
 
-async function handlePullRequestEvent(payload: PullRequestPayload) {
-  if (!["opened", "synchronize", "reopened"].includes(payload.action)) {
-    return NextResponse.json(
-      { message: `Action '${payload.action}' ignored` },
-      { status: 200 },
-    );
-  }
-
-  if (payload.pull_request.draft) {
-    return NextResponse.json({ message: "Draft PR ignored" }, { status: 200 });
-  }
-
-  let repository = await db.repository.findUnique({
-    where: { githubId: payload.repository.id },
-    include: { user: true, installation: true },
-  });
-
-  if (!repository) {
-    return NextResponse.json(
-      { message: "Repository not connected" },
-      { status: 200 },
-    );
-  }
-
-  // Link installation on PR webhook if App is installed but link was missing.
-  if (payload.installation && !repository.installationId) {
-    const installationDbId = await ensureInstallationDbId(payload.installation);
-    repository = await db.repository.update({
-      where: { id: repository.id },
-      data: {
-        installationId: installationDbId,
-        defaultBranch:
-          payload.repository.default_branch ?? repository.defaultBranch,
-      },
-      include: { user: true, installation: true },
-    });
-  }
-
-  const headSha = payload.pull_request.head.sha;
-  const mode = reviewModeFromEnv();
-
-  const existingReview = await db.review.findFirst({
-    where: {
-      repositoryId: repository.id,
-      prNumber: payload.pull_request.number,
-      status: { in: ["PENDING", "PROCESSING"] },
-    },
-  });
-
-  if (existingReview) {
-    return NextResponse.json(
-      { message: "Review already in progress" },
-      { status: 200 },
-    );
-  }
-
-  const duplicate = await db.review.findFirst({
-    where: {
-      repositoryId: repository.id,
-      prNumber: payload.pull_request.number,
-      headSha,
-      mode,
-      status: { not: "FAILED" },
-    },
-  });
-
-  if (duplicate) {
-    return NextResponse.json(
-      { message: "Review already exists for this commit", reviewId: duplicate.id },
-      { status: 200 },
-    );
-  }
-
-  const review = await db.review.create({
-    data: {
-      repositoryId: repository.id,
-      userId: repository.userId,
-      prNumber: payload.pull_request.number,
-      prTitle: payload.pull_request.title,
-      prUrl: payload.pull_request.html_url,
-      headSha,
-      mode,
-      status: "PENDING",
-    },
-  });
-
-  await inngest.send({
-    name: "review/pr.requested",
-    data: {
-      reviewId: review.id,
-      repositoryId: repository.id,
-      prNumber: payload.pull_request.number,
-      userId: repository.userId,
-      headSha,
-      mode,
-      installationId: payload.installation?.id ?? null,
-    },
-  });
-
-  return NextResponse.json(
-    { message: "Review triggered", reviewId: review.id },
-    { status: 200 },
-  );
-}
-
 export async function POST(request: NextRequest) {
   const payload = await request.text();
   const signature = request.headers.get("x-hub-signature-256");
@@ -260,6 +371,9 @@ export async function POST(request: NextRequest) {
       return handleInstallationRepositoriesEvent(
         data as InstallationRepositoriesPayload,
       );
+
+    case "push":
+      return handlePushEvent(data as PushPayload);
 
     case "pull_request":
       return handlePullRequestEvent(data as PullRequestPayload);
