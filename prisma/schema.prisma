@@ -14,18 +14,18 @@ datasource db {
 }
 
 model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
+  id             String       @id
+  name           String
+  email          String
+  emailVerified  Boolean      @default(false)
+  image          String?
   githubUsername String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  repositories Repository[]
-  reviews      Review[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  sessions       Session[]
+  accounts       Account[]
+  repositories   Repository[]
+  reviews        Review[]
 
   @@unique([email])
   @@map("user")
@@ -79,19 +79,60 @@ model Verification {
   @@map("verification")
 }
 
+/// GitHub App installation (one per org/user account that installed the app).
+model GitHubInstallation {
+  id             String       @id @default(cuid())
+  installationId BigInt       @unique
+  accountLogin   String
+  accountType    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  repositories   Repository[]
+
+  @@map("github_installation")
+}
+
 model Repository {
+  id             String              @id @default(cuid())
+  userId         String
+  githubId       Int                 @unique
+  name           String
+  fullName       String
+  private        Boolean             @default(false)
+  htmlUrl        String
+  installationId String?
+  defaultBranch  String              @default("main")
+  indexStatus    String              @default("none") // none | indexing | ready | failed
+  indexedCommit  String?
+  indexedBranch  String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  installation GitHubInstallation? @relation(fields: [installationId], references: [id], onDelete: SetNull)
+  reviews      Review[]
+  indexJobs    IndexJob[]
+  fileChunks   FileChunk[]
+
+  @@index([installationId])
+  @@index([indexStatus])
+}
+
+model IndexJob {
   id           String   @id @default(cuid())
-  userId       String
-  githubId     Int      @unique
-  name         String
-  fullName     String
-  private      Boolean  @default(false)
-  htmlUrl      String
+  repositoryId String
+  status       String   @default("pending") // pending | processing | completed | failed
+  baseCommit   String?
+  headCommit   String?
+  branch       String?
+  error        String?  @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reviews Review[]
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId])
+  @@index([status])
 }
 
 model Review {
@@ -101,6 +142,8 @@ model Review {
   prNumber        Int
   prTitle         String
   prUrl           String
+  mode            String       @default("diff") // diff | graph
+  headSha         String?
   status          ReviewStatus @default(PENDING)
   summary         String?      @db.Text
   riskScore       Int?
@@ -108,6 +151,7 @@ model Review {
   error           String?      @db.Text
   githubReviewId  BigInt?
   githubReviewUrl String?
+  checkRunId      BigInt?
   postedAt        DateTime?
   commitStatusSha String?
   postError       String?      @db.Text
@@ -117,9 +161,32 @@ model Review {
   repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([repositoryId, prNumber, headSha, mode])
   @@index([repositoryId])
   @@index([userId])
   @@index([status])
+  @@index([mode])
+}
+
+/// Code chunks with embeddings for hybrid retrieval (Step 19+).
+/// Query vectors via prisma.$queryRaw; HNSW index added in scripts/sql/002-filechunk-hnsw.sql (Step 19).
+model FileChunk {
+  id           String                      @id @default(cuid())
+  repositoryId String
+  path         String
+  symbol       String?
+  startLine    Int
+  endLine      Int
+  content      String                      @db.Text
+  embedding    Unsupported("vector(1024)")
+  commitSha    String
+  createdAt    DateTime                    @default(now())
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId])
+  @@index([repositoryId, path])
+  @@index([repositoryId, commitSha])
 }
 
 enum ReviewStatus {

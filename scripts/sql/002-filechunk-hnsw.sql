@@ -1,0 +1,4 @@
+-- Step 19 (optional): HNSW index for FileChunk cosine similarity search.
+-- Run after FileChunk table exists and you have data to index.
+-- CREATE INDEX IF NOT EXISTS "FileChunk_embedding_hnsw_idx"
+--   ON "FileChunk" USING hnsw (embedding vector_cosine_ops);

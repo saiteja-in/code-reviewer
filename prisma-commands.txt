@@ -39,6 +39,24 @@ docker compose exec postgres psql -U postgres -d codereviewer -c "SELECT extname
 pnpm prisma db push
 # or: pnpm prisma migrate status
 
+# --- Step 3: Extend Prisma schema (POC models) ---
+# Apply schema to local DB (pick one):
+pnpm prisma migrate dev --name extend_poc_schema
+# or quick sync without migration history:
+# pnpm prisma db push
+
+pnpm prisma generate
+
+# Verify new tables exist:
+docker compose exec postgres psql -U postgres -d codereviewer -c "\dt"
+# Expect: GitHubInstallation, IndexJob, FileChunk (+ existing tables)
+
+# Verify Repository columns:
+docker compose exec postgres psql -U postgres -d codereviewer -c "\d \"Repository\""
+
+# Verify app still builds:
+pnpm build
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6
