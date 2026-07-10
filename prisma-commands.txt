@@ -95,6 +95,23 @@ curl http://localhost:3000/api/health/neo4j
 
 pnpm build
 
+# --- Step 6: Register GitHub App (manual) + env wiring ---
+# Full guide: scripts/setup/github-app-setup.md
+
+# 1. Create GitHub App at https://github.com/settings/apps/new
+# 2. Permissions: Contents Read, Metadata Read, PRs Read+Write, Checks Read+Write
+# 3. Events: pull_request, push, installation, installation_repositories
+# 4. Webhook URL: https://<tunnel>/api/webhooks/github
+# 5. Generate private key → encode for .env:
+#    .\scripts\setup\encode-pem-for-env.ps1 -PemPath "C:\path\to\app.private-key.pem"
+# 6. Install App on a test repo
+
+# Verify env vars (no API call yet):
+pnpm verify:github-app-env
+
+# Optional: tunnel for webhooks
+# cloudflared tunnel --url http://localhost:3000
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6

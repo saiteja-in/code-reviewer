@@ -1,4 +1,12 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is a [Next.js](https://nextjs.org) AI code review app (see `project_context.md` for architecture).
+
+## POC implementation steps
+
+Infrastructure and setup commands are tracked in [`prisma-commands.txt`](./prisma-commands.txt).
+
+| Step | Topic | Doc |
+|------|--------|-----|
+| 6 | GitHub App registration | [`scripts/setup/github-app-setup.md`](./scripts/setup/github-app-setup.md) |
 
 ## Getting Started
 
