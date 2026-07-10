@@ -182,6 +182,23 @@ pnpm test
 # Verify installation link:
 docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT r."fullName", gi."accountLogin", gi."installationId" FROM "Repository" r LEFT JOIN github_installation gi ON r."installationId" = gi.id;'
 
+# --- Step 11: Diff-mode A/B baseline ---
+pnpm test
+
+# Default: REVIEW_MODE=diff (diff-only baseline for Step 19 comparison)
+# Same PR + commit can run both modes (unique on repositoryId, prNumber, headSha, mode):
+#   REVIEW_MODE=diff  → webhook or dashboard trigger
+#   REVIEW_MODE=graph → change env OR pass mode on manual trigger (tRPC review.trigger)
+
+# Manual A/B on same commit (dashboard/API):
+#   review.trigger({ repositoryId, prNumber, mode: "diff" })
+#   review.trigger({ repositoryId, prNumber, mode: "graph" })
+
+# Verify two mode rows for same PR:
+docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT "prNumber", "headSha", mode, status FROM "Review" ORDER BY "createdAt" DESC LIMIT 5;'
+
+pnpm build
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6

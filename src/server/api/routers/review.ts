@@ -7,6 +7,7 @@ import {
   getGitHubAccessToken,
 } from "@/server/services/github";
 import { GITHUB_APP_INSTALLATION_REQUIRED } from "@/server/services/github-app";
+import { resolveReviewMode, type ReviewMode } from "@/server/services/review-mode";
 
 export const reviewRouter = createTRPCRouter({
   trigger: protectedProcedure
@@ -14,6 +15,8 @@ export const reviewRouter = createTRPCRouter({
       z.object({
         repositoryId: z.string(),
         prNumber: z.number(),
+        /** Override REVIEW_MODE env for A/B runs (diff vs graph on same commit). */
+        mode: z.enum(["diff", "graph"]).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -63,7 +66,7 @@ export const reviewRouter = createTRPCRouter({
         });
       }
 
-      const mode = process.env.REVIEW_MODE === "graph" ? "graph" : "diff";
+      const mode = resolveReviewMode(input.mode);
 
       const review = await ctx.db.review.create({
         data: {

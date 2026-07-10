@@ -1,4 +1,6 @@
 import { verify } from "@octokit/webhooks-methods";
+export { reviewModeFromEnv, resolveReviewMode } from "@/server/services/review-mode";
+export type { ReviewMode } from "@/server/services/review-mode";
 
 /**
  * Verify GitHub webhook HMAC signature. Fail closed in production if secret unset.
@@ -23,8 +25,4 @@ export async function verifyGitHubWebhook(
   }
 
   return verify(secret, payload, signature);
-}
-
-export function reviewModeFromEnv(): "diff" | "graph" {
-  return process.env.REVIEW_MODE === "graph" ? "graph" : "diff";
 }

@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 import { inngest } from "@/server/inngest";
 import {
   reviewModeFromEnv,
+  resolveReviewMode,
   verifyGitHubWebhook,
 } from "@/server/services/github-webhook";
 import {

@@ -1,6 +1,7 @@
 import { inngest } from "../client";
 import { db } from "@/server/db";
 import { reviewCode } from "@/server/services/ai";
+import { resolveReviewMode, type ReviewMode } from "@/server/services/review-mode";
 import {
   GITHUB_APP_INSTALLATION_REQUIRED,
   requireInstallationAccessToken,
@@ -33,7 +34,7 @@ export type ReviewPREvent = {
     prNumber: number;
     userId: string;
     headSha?: string | null;
-    mode?: string;
+    mode?: ReviewMode | string | null;
     installationId?: number | null;
   };
 };
@@ -232,6 +233,8 @@ export const reviewPR = inngest.createFunction(
     });
 
     const reviewResult = await step.run("generate-review", async () => {
+      const mode = resolveReviewMode(event.data.mode);
+      // Step 19: pass repoContext when mode=graph and index is ready.
       return reviewCode(
         pr.title,
         files.map((f) => ({
@@ -241,6 +244,7 @@ export const reviewPR = inngest.createFunction(
           deletions: f.deletions,
           patch: f.patch,
         })),
+        { mode },
       );
     });
 
