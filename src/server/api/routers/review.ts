@@ -6,6 +6,7 @@ import {
   fetchPullRequest,
   getGitHubAccessToken,
 } from "@/server/services/github";
+import { GITHUB_APP_INSTALLATION_REQUIRED } from "@/server/services/github-app";
 
 export const reviewRouter = createTRPCRouter({
   trigger: protectedProcedure
@@ -51,10 +52,18 @@ export const reviewRouter = createTRPCRouter({
         input.prNumber,
       );
 
-      const mode = process.env.REVIEW_MODE === "graph" ? "graph" : "diff";
       const installationId = repository.installation?.installationId
         ? Number(repository.installation.installationId)
         : null;
+
+      if (!installationId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: GITHUB_APP_INSTALLATION_REQUIRED,
+        });
+      }
+
+      const mode = process.env.REVIEW_MODE === "graph" ? "graph" : "diff";
 
       const review = await ctx.db.review.create({
         data: {

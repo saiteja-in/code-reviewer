@@ -112,6 +112,27 @@ export async function getInstallationDbId(
   return row?.id ?? null;
 }
 
+/** Resolve GitHub App installation id from webhook payload or linked repository. */
+export async function resolveGitHubInstallationId(
+  repositoryId: string,
+  webhookInstallationId?: number | null,
+): Promise<number | null> {
+  if (webhookInstallationId) {
+    return webhookInstallationId;
+  }
+
+  const repo = await db.repository.findUnique({
+    where: { id: repositoryId },
+    include: { installation: true },
+  });
+
+  if (repo?.installation?.installationId) {
+    return Number(repo.installation.installationId);
+  }
+
+  return null;
+}
+
 /** Resolve installation DB id, creating the row if missing (e.g. PR before install event). */
 export async function ensureInstallationDbId(
   installation: GitHubInstallationPayload,

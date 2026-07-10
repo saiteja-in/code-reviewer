@@ -168,6 +168,20 @@ docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT "prNumb
 # Optional legacy commit status on the commit:
 # GITHUB_USE_COMMIT_STATUS=1
 
+# --- Step 10: Post as App bot (installation token only) ---
+pnpm test
+
+# Repo must have GitHub App installed AND linked (Repository.installationId set).
+# Connect repo in dashboard, then install App on that repo (Step 8 webhook links them).
+
+# Trigger review → PR review author must be your-app[bot], NOT your personal account.
+# Check Runs also appear under the App.
+
+# Without App installation, review fails early with clear error in Review.error / postError.
+
+# Verify installation link:
+docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT r."fullName", gi."accountLogin", gi."installationId" FROM "Repository" r LEFT JOIN github_installation gi ON r."installationId" = gi.id;'
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6

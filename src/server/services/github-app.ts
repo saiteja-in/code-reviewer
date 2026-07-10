@@ -10,6 +10,16 @@ export class GitHubAppConfigError extends Error {
   }
 }
 
+export class GitHubAppInstallationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GitHubAppInstallationError";
+  }
+}
+
+export const GITHUB_APP_INSTALLATION_REQUIRED =
+  "GitHub App is not installed on this repository. Install the App on the repo to post reviews and checks as the bot (see scripts/setup/github-app-setup.md).";
+
 type GitHubAppConfig = {
   appId: string;
   privateKey: string;
@@ -124,4 +134,26 @@ export async function getInstallationAccessToken(
   });
   const { token } = await auth({ type: "installation" });
   return token;
+}
+
+/**
+ * Installation token required for bot writes (reviews, check runs).
+ * Never falls back to user OAuth.
+ */
+export async function requireInstallationAccessToken(
+  installationId: number | null | undefined,
+): Promise<string> {
+  if (!installationId) {
+    throw new GitHubAppInstallationError(GITHUB_APP_INSTALLATION_REQUIRED);
+  }
+
+  try {
+    return await getInstallationAccessToken(installationId);
+  } catch (err) {
+    const detail =
+      err instanceof Error ? err.message : "Unknown installation auth error";
+    throw new GitHubAppInstallationError(
+      `GitHub App installation token failed: ${detail}`,
+    );
+  }
 }
