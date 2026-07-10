@@ -24,6 +24,21 @@ docker compose logs postgres neo4j
 # NEO4J_USER=neo4j
 # NEO4J_PASSWORD=password123
 
+# --- Step 2: Environment + pgvector extension ---
+# Copy env template (keep your existing secrets if you already have a .env):
+#   copy .env.example .env
+# Edit .env — at minimum set DATABASE_URL to local Docker Postgres (see above).
+
+# Enable pgvector on the codereviewer database:
+docker compose exec -T postgres psql -U postgres -d codereviewer < scripts/sql/001-enable-pgvector.sql
+
+# Verify extension:
+docker compose exec postgres psql -U postgres -d codereviewer -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
+
+# Verify Prisma connects (schema unchanged in Step 2):
+pnpm prisma db push
+# or: pnpm prisma migrate status
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6
