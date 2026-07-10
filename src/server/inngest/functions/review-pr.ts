@@ -23,6 +23,9 @@ export type ReviewPREvent = {
     repositoryId: string;
     prNumber: number;
     userId: string;
+    headSha?: string | null;
+    mode?: string;
+    installationId?: number | null;
   };
 };
 

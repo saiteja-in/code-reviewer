@@ -129,6 +129,27 @@ pnpm verify:github-app-api
 
 pnpm build
 
+# --- Step 8: Webhook verify + installation events ---
+pnpm test
+
+# 1. Start app + tunnel (webhook URL must point to /api/webhooks/github)
+pnpm dev
+
+# 2. GitHub App → Settings → Advanced → Recent deliveries
+#    Redeliver "installation" or "installation_repositories" → expect 200
+
+# 3. Verify DB after install event:
+docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT "installationId", "accountLogin" FROM github_installation;'
+
+# 4. Connect a repo via dashboard first, then install App on that repo (or add repos to installation).
+#    Check link:
+docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT "fullName", "installationId" FROM "Repository";'
+
+# 5. Open/update a PR on connected repo → review row should have headSha + mode:
+docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT "prNumber", "headSha", mode, status FROM "Review" ORDER BY "createdAt" DESC LIMIT 3;'
+
+# Invalid signature should return 401 (test with wrong secret in a manual curl).
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6
