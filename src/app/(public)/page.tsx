@@ -22,7 +22,7 @@ export default function Home() {
           <Link href="/repos">View Repositories</Link>
         </Button>
       </div>
-      <HealthCheck />
+      {/* <HealthCheck />    */}
     </div>
   );
 }

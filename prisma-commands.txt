@@ -1,3 +1,29 @@
+# --- Step 1: Local infrastructure (Postgres + Neo4j) ---
+# From repo root:
+docker compose up -d
+docker compose ps
+docker compose logs postgres neo4j
+
+# Verify Postgres (password: postgres)
+# docker compose exec postgres psql -U postgres -d codereviewer -c "SELECT 1;"
+
+# Neo4j Browser: http://localhost:7474
+# Login: neo4j / password123 (you may be prompted to change password on first login — you can keep password123 for local dev)
+
+# Stop services:
+# docker compose down
+
+# Stop and remove volumes (destructive — wipes DB data):
+# docker compose down -v
+
+# Local DATABASE_URL for Step 2+:
+# DATABASE_URL=postgresql://postgres:postgres@localhost:5432/codereviewer
+
+# Local Neo4j env for later steps:
+# NEO4J_URI=bolt://localhost:7687
+# NEO4J_USER=neo4j
+# NEO4J_PASSWORD=password123
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6
