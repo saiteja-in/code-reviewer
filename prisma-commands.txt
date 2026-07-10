@@ -57,6 +57,22 @@ docker compose exec postgres psql -U postgres -d codereviewer -c "\d \"Repositor
 # Verify app still builds:
 pnpm build
 
+# --- Step 4: Neo4j constraints + indexes ---
+# Ensure Neo4j is running:
+docker compose up -d neo4j
+
+# Option A — pipe script into cypher-shell (PowerShell):
+Get-Content scripts\neo4j-init.cypher -Raw | docker compose exec -T neo4j cypher-shell -u neo4j -p password123
+
+# Option B — Neo4j Browser: http://localhost:7474
+# Paste contents of scripts/neo4j-init.cypher and run.
+
+# Verify constraints (expect 5: File, Class, Interface, Method, Field id uniqueness):
+docker compose exec neo4j cypher-shell -u neo4j -p password123 "SHOW CONSTRAINTS"
+
+# Verify indexes (expect repoId, name, path indexes):
+docker compose exec neo4j cypher-shell -u neo4j -p password123 "SHOW INDEXES"
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6
