@@ -150,6 +150,24 @@ docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT "prNumb
 
 # Invalid signature should return 401 (test with wrong secret in a manual curl).
 
+# --- Step 9: Check Runs on PR review ---
+pnpm test
+pnpm build
+
+# Requires Checks: Read & Write on GitHub App (or user token with repo scope).
+# Start dev + Inngest:
+pnpm dev
+npx inngest-cli@latest dev -u http://localhost:3000/api/inngest
+
+# Trigger review (webhook or dashboard). On the PR Checks tab expect:
+#   "AI Code Review" — in progress, then completed (success / neutral / failure)
+
+# Verify checkRunId stored:
+docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT "prNumber", "checkRunId", status FROM "Review" ORDER BY "createdAt" DESC LIMIT 3;'
+
+# Optional legacy commit status on the commit:
+# GITHUB_USE_COMMIT_STATUS=1
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6

@@ -104,3 +104,24 @@ export async function getInstallationOctokit(
   const { token } = await auth({ type: "installation" });
   return createOctokit(token, config.baseUrl);
 }
+
+/** Installation access token string for use with fetch-based github.ts helpers. */
+export async function getInstallationAccessToken(
+  installationId: number | bigint | string,
+): Promise<string> {
+  const config = getGitHubAppConfig();
+  const id = Number(installationId);
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new GitHubAppConfigError(
+      `Invalid installationId: ${String(installationId)}`,
+    );
+  }
+
+  const auth = createAppAuth({
+    appId: config.appId,
+    privateKey: config.privateKey,
+    installationId: id,
+  });
+  const { token } = await auth({ type: "installation" });
+  return token;
+}

@@ -18,6 +18,7 @@ export const reviewRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const repository = await ctx.db.repository.findUnique({
         where: { id: input.repositoryId, userId: ctx.user.id },
+        include: { installation: true },
       });
 
       if (!repository) {
@@ -50,6 +51,11 @@ export const reviewRouter = createTRPCRouter({
         input.prNumber,
       );
 
+      const mode = process.env.REVIEW_MODE === "graph" ? "graph" : "diff";
+      const installationId = repository.installation?.installationId
+        ? Number(repository.installation.installationId)
+        : null;
+
       const review = await ctx.db.review.create({
         data: {
           repositoryId: repository.id,
@@ -57,6 +63,8 @@ export const reviewRouter = createTRPCRouter({
           prNumber: pr.number,
           prTitle: pr.title,
           prUrl: pr.html_url,
+          headSha: pr.head.sha,
+          mode,
           status: "PENDING",
         },
       });
@@ -68,6 +76,9 @@ export const reviewRouter = createTRPCRouter({
           repositoryId: repository.id,
           prNumber: pr.number,
           userId: ctx.user.id,
+          headSha: pr.head.sha,
+          mode,
+          installationId,
         },
       });
 

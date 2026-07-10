@@ -4,6 +4,7 @@ import {
   buildInlineCommentBody,
   buildReviewBody,
   statusFromReview,
+  checkRunConclusionFromReview,
   RISK_FAIL_THRESHOLD,
 } from "./review-format.ts";
 import type { ReviewResult } from "./ai.ts";
@@ -52,6 +53,62 @@ describe("statusFromReview", () => {
       ],
     });
     assert.equal(status.state, "failure");
+  });
+});
+
+describe("checkRunConclusionFromReview", () => {
+  it("returns failure for critical", () => {
+    assert.equal(
+      checkRunConclusionFromReview({
+        ...baseReview,
+        comments: [
+          {
+            file: "a.ts",
+            line: 1,
+            severity: "critical",
+            category: "bug",
+            message: "crash",
+          },
+        ],
+      }),
+      "failure",
+    );
+  });
+
+  it("returns neutral for high severity", () => {
+    assert.equal(
+      checkRunConclusionFromReview({
+        ...baseReview,
+        comments: [
+          {
+            file: "a.ts",
+            line: 1,
+            severity: "high",
+            category: "bug",
+            message: "bug",
+          },
+        ],
+      }),
+      "neutral",
+    );
+  });
+
+  it("returns success when only low/medium", () => {
+    assert.equal(
+      checkRunConclusionFromReview({
+        ...baseReview,
+        comments: [
+          {
+            file: "a.ts",
+            line: 1,
+            severity: "medium",
+            category: "style",
+            message: "nit",
+          },
+        ],
+      }),
+      "success",
+    );
   });
 });
 

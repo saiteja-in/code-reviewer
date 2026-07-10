@@ -261,3 +261,49 @@ export function statusFromReview(review: ReviewResult): CommitStatusResult {
     description: `Risk ${review.riskScore}/100 · ${issueCount} minor finding${issueCount === 1 ? "" : "s"}`,
   };
 }
+
+export type CheckRunConclusion = "success" | "failure" | "neutral";
+
+/** Maps review findings to GitHub Check Run conclusion. */
+export function checkRunConclusionFromReview(
+  review: ReviewResult,
+): CheckRunConclusion {
+  const counts = countBySeverity(review.comments);
+  if (counts.critical > 0) {
+    return "failure";
+  }
+  if (counts.high > 0 || review.riskScore >= RISK_FAIL_THRESHOLD) {
+    return "neutral";
+  }
+  return "success";
+}
+
+export function checkRunOutputFromReview(review: ReviewResult): {
+  title: string;
+  summary: string;
+} {
+  const issueCount = review.comments.length;
+  if (issueCount === 0) {
+    return {
+      title: "No issues found",
+      summary: `${review.summary}\n\nRisk score: **${review.riskScore}/100**`,
+    };
+  }
+
+  const counts = countBySeverity(review.comments);
+  const parts = [
+    review.summary,
+    "",
+    `**${issueCount}** finding(s) · risk **${review.riskScore}/100**`,
+  ];
+  if (counts.critical + counts.high > 0) {
+    parts.push(
+      `Critical/high: **${counts.critical + counts.high}** (P0: ${counts.critical}, P1: ${counts.high})`,
+    );
+  }
+
+  return {
+    title: `${issueCount} finding(s) — risk ${review.riskScore}/100`,
+    summary: parts.join("\n"),
+  };
+}
