@@ -167,3 +167,9 @@ Both can coexist during migration.
 | App not visible on repo | Install App on that account/repo |
 
 Next: **Step 7** — `github-app.ts` + live API smoke test with installation token.
+
+```powershell
+pnpm install
+pnpm verify:github-app-api
+# or: pnpm verify:github-app-api -- --installation-id ID --owner you --repo my-repo
+```

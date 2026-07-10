@@ -112,6 +112,23 @@ pnpm verify:github-app-env
 # Optional: tunnel for webhooks
 # cloudflared tunnel --url http://localhost:3000
 
+# --- Step 7: github-app.ts + API smoke test ---
+pnpm install
+pnpm test   # includes github-app.test.ts (parsePrivateKey)
+
+# Live API test (uses first App installation if no args):
+pnpm verify:github-app-api
+
+# Or specify installation + repo:
+# pnpm verify:github-app-api -- --installation-id YOUR_ID --owner YOU --repo YOUR-REPO
+
+# Optional in .env:
+# GITHUB_APP_TEST_INSTALLATION_ID=
+# GITHUB_APP_TEST_OWNER=
+# GITHUB_APP_TEST_REPO=
+
+pnpm build
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6
