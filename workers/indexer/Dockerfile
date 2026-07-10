@@ -1,14 +1,19 @@
-FROM node:22-bookworm-slim
+FROM node:20-bookworm-slim
 
 RUN corepack enable pnpm
 
 WORKDIR /app
 
-COPY package.json ./
-RUN pnpm install --no-frozen-lockfile
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY prisma ./prisma
+COPY workers/indexer ./workers/indexer
 
-COPY tsconfig.json ./
-COPY src ./src
+RUN pnpm install --filter @aicodereview/indexer-worker...
+
+# Single Prisma generate at repo root (avoids duplicate generate / EPERM)
+RUN pnpm exec prisma generate --schema=prisma/schema.prisma
+
+WORKDIR /app/workers/indexer
 
 ENV NODE_ENV=production
 ENV INDEXER_WORKSPACE_DIR=/tmp/repos

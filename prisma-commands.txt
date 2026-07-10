@@ -200,8 +200,14 @@ docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT "prNumb
 pnpm build
 
 # --- Step 12: Indexer worker scaffold ---
-# Install workspace deps (includes workers/indexer):
+# Prisma client is generated ONCE from repo root (never in worker postinstall — avoids Windows EPERM):
+pnpm prisma generate
 pnpm install
+
+# If pnpm install still fails with EPERM on Windows:
+# 1. Stop pnpm dev, indexer worker, Prisma Studio, Docker indexer-worker
+# 2. Retry: pnpm install
+# 3. Then: pnpm prisma generate
 
 # Local run (Postgres + Neo4j on localhost):
 cd workers/indexer
@@ -215,6 +221,32 @@ docker compose up indexer-worker
 # Run in background with infra:
 docker compose up -d postgres neo4j indexer-worker
 docker compose logs -f indexer-worker
+
+# --- Step 13: Inngest Connect + stub index-repo ---
+# Terminal 1: Next.js + Inngest dev (registers review-pr)
+pnpm dev
+npx inngest-cli@latest dev -u http://localhost:3000/api/inngest
+
+# Terminal 2: indexer worker (registers index-repo via Connect)
+cd workers/indexer
+$env:INNGEST_DEV="1"
+$env:INNGEST_BASE_URL="http://localhost:8288"
+$env:DATABASE_URL="postgresql://postgres:postgres@localhost:5432/codereviewer"
+$env:NEO4J_URI="bolt://localhost:7687"
+$env:NEO4J_PASSWORD="password123"
+pnpm start
+
+# Or Docker worker (Inngest dev must run on host):
+docker compose up -d indexer-worker
+docker compose logs -f indexer-worker
+
+# Inngest UI http://localhost:8288 — expect review-pr + index-repo
+
+# Send stub index event (get repository id from dashboard or DB):
+pnpm send:index-event -- YOUR_REPOSITORY_CUID
+
+# Verify indexStatus flipped:
+docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT id, "fullName", "indexStatus", "indexedCommit" FROM "Repository";'
 
 // this is version 6 , not the latest version
 pnpm add -D prisma@6

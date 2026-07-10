@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "node --experimental-strip-types --test src/server/services/*.test.ts",
     "verify:github-app-env": "node scripts/verify-github-app-env.mjs",
-    "verify:github-app-api": "node --experimental-strip-types scripts/verify-github-app-api.ts"
+    "verify:github-app-api": "node --experimental-strip-types scripts/verify-github-app-api.ts",
+    "send:index-event": "node scripts/send-index-event.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",

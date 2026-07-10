@@ -135,22 +135,22 @@ importers:
 
   workers/indexer:
     dependencies:
+      '@prisma/client':
+        specifier: '6'
+        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
+      inngest:
+        specifier: ^4.11.0
+        version: 4.11.0(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(express@5.2.1)(hono@4.12.26)(next@16.2.7(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(zod@4.4.3)
       neo4j-driver:
         specifier: ^5.28.1
         version: 5.28.3
-      pg:
-        specifier: ^8.13.1
-        version: 8.22.0
     devDependencies:
       '@types/node':
         specifier: ^20
         version: 20.19.43
-      '@types/pg':
-        specifier: ^8.11.10
-        version: 8.15.6
       typescript:
         specifier: ^5
         version: 5.9.3
@@ -9756,13 +9756,15 @@ snapshots:
   pg-cloudflare@1.4.0:
     optional: true
 
-  pg-connection-string@2.14.0: {}
+  pg-connection-string@2.14.0:
+    optional: true
 
   pg-int8@1.0.1: {}
 
   pg-pool@3.14.0(pg@8.22.0):
     dependencies:
       pg: 8.22.0
+    optional: true
 
   pg-protocol@1.15.0: {}
 
@@ -9783,10 +9785,12 @@ snapshots:
       pgpass: 1.0.5
     optionalDependencies:
       pg-cloudflare: 1.4.0
+    optional: true
 
   pgpass@1.0.5:
     dependencies:
       split2: 4.2.0
+    optional: true
 
   picocolors@1.1.1: {}
 
@@ -10322,7 +10326,8 @@ snapshots:
 
   source-map@0.6.1: {}
 
-  split2@4.2.0: {}
+  split2@4.2.0:
+    optional: true
 
   stable-hash@0.0.5: {}
 
