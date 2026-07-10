@@ -199,6 +199,23 @@ docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT "prNumb
 
 pnpm build
 
+# --- Step 12: Indexer worker scaffold ---
+# Install workspace deps (includes workers/indexer):
+pnpm install
+
+# Local run (Postgres + Neo4j on localhost):
+cd workers/indexer
+pnpm start
+
+# Docker (from repo root):
+docker compose build indexer-worker
+docker compose up indexer-worker
+# Expect: indexer-worker: postgres ok / neo4j ok / indexer-worker: ready
+
+# Run in background with infra:
+docker compose up -d postgres neo4j indexer-worker
+docker compose logs -f indexer-worker
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6

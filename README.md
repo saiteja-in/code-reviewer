@@ -8,6 +8,7 @@ Infrastructure and setup commands are tracked in [`prisma-commands.txt`](./prism
 |------|--------|-----|
 | 6 | GitHub App registration | [`scripts/setup/github-app-setup.md`](./scripts/setup/github-app-setup.md) |
 | 7 | GitHub App Octokit client | [`src/server/services/github-app.ts`](./src/server/services/github-app.ts) — run `pnpm verify:github-app-api` |
+| 12 | Indexer worker Docker scaffold | [`workers/indexer/`](./workers/indexer/) |
 
 ## Getting Started
 

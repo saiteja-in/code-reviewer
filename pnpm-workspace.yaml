@@ -1,5 +1,6 @@
 packages:
   - "."
+  - "workers/indexer"
 
 allowBuilds:
   '@prisma/client': true
