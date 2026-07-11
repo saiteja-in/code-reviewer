@@ -58,6 +58,10 @@ export function PrFilesTabs({
     onSuccess: () => latestReview.refetch(),
   });
 
+  const requeueReview = trpc.review.requeue.useMutation({
+    onSuccess: () => latestReview.refetch(),
+  });
+
   const review = latestReview.data;
   const isReviewing =
     review?.status === "PENDING" || review?.status === "PROCESSING";
@@ -108,6 +112,21 @@ export function PrFilesTabs({
                   <Wand2 className="size-4" />
                 )}
                 {review ? "Re-run review" : "Run AI Review"}
+              </Button>
+            )}
+            {review?.status === "PENDING" && (
+              <Button
+                variant="outline"
+                onClick={() => requeueReview.mutate({ reviewId: review.id })}
+                disabled={requeueReview.isPending}
+                className="gap-1.5"
+              >
+                {requeueReview.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Wand2 className="size-4" />
+                )}
+                Retry queued review
               </Button>
             )}
           </div>

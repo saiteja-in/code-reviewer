@@ -12,7 +12,8 @@
     "eval:golden:print": "node scripts/run-golden-eval.mjs",
     "verify:github-app-env": "node scripts/verify-github-app-env.mjs",
     "verify:github-app-api": "node --experimental-strip-types scripts/verify-github-app-api.ts",
-    "send:index-event": "node scripts/send-index-event.mjs"
+    "send:index-event": "node scripts/send-index-event.mjs",
+    "replay:review-event": "node scripts/replay-review-event.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { inngest } from "@/server/inngest";
+import { schedulePrReview } from "@/server/services/graph-review-after-index";
 import {
   reviewModeFromEnv,
   verifyGitHubWebhook,
@@ -207,7 +207,7 @@ async function handlePullRequestEvent(payload: PullRequestPayload) {
     },
   });
 
-  if (existingReview) {
+  if (existingReview?.status === "PROCESSING") {
     return NextResponse.json(
       {
         message: "Review already in progress",
@@ -215,6 +215,34 @@ async function handlePullRequestEvent(payload: PullRequestPayload) {
       },
       { status: 200 },
     );
+  }
+
+  const installationId =
+    payload.installation?.id ??
+    (repository.installation?.installationId
+      ? Number(repository.installation.installationId)
+      : null);
+
+  if (existingReview?.status === "PENDING") {
+    const scheduled = await schedulePrReview({
+      repositoryId: repository.id,
+      userId: repository.userId,
+      prNumber: payload.pull_request.number,
+      prTitle: payload.pull_request.title,
+      prUrl: payload.pull_request.html_url,
+      headSha,
+      mode,
+      installationId,
+      indexResult,
+      existingReviewId: existingReview.id,
+    });
+
+    return NextResponse.json({
+      message: scheduled.message,
+      reviewId: scheduled.reviewId,
+      reviewQueued: scheduled.reviewQueued,
+      index: indexResult,
+    });
   }
 
   const duplicate = await db.review.findFirst({
@@ -238,35 +266,22 @@ async function handlePullRequestEvent(payload: PullRequestPayload) {
     );
   }
 
-  const review = await db.review.create({
-    data: {
-      repositoryId: repository.id,
-      userId: repository.userId,
-      prNumber: payload.pull_request.number,
-      prTitle: payload.pull_request.title,
-      prUrl: payload.pull_request.html_url,
-      headSha,
-      mode,
-      status: "PENDING",
-    },
-  });
-
-  await inngest.send({
-    name: "review/pr.requested",
-    data: {
-      reviewId: review.id,
-      repositoryId: repository.id,
-      prNumber: payload.pull_request.number,
-      userId: repository.userId,
-      headSha,
-      mode,
-      installationId: payload.installation?.id ?? null,
-    },
+  const scheduled = await schedulePrReview({
+    repositoryId: repository.id,
+    userId: repository.userId,
+    prNumber: payload.pull_request.number,
+    prTitle: payload.pull_request.title,
+    prUrl: payload.pull_request.html_url,
+    headSha,
+    mode,
+    installationId,
+    indexResult,
   });
 
   return NextResponse.json({
-    message: "Review triggered",
-    reviewId: review.id,
+    message: scheduled.message,
+    reviewId: scheduled.reviewId,
+    reviewQueued: scheduled.reviewQueued,
     index: indexResult,
   });
 }

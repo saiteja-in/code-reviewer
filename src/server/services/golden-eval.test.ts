@@ -87,8 +87,10 @@ describe("scoreGoldenReview", () => {
 describe("golden-context.json", () => {
   it("loads cases from eval fixture file", () => {
     const golden = loadGoldenFile();
-    assert.ok(golden.cases.length >= 1);
+    assert.ok(golden.cases.length >= 3);
     assert.equal(golden.cases[0]?.id, "cross-file-caller-impact");
+    assert.equal(golden.cases[1]?.id, "signature-param-removed");
+    assert.equal(golden.cases[2]?.id, "definition-callee-contract");
   });
 
   it("scores all file cases against mock passing context", () => {

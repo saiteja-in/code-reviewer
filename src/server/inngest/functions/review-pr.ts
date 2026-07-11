@@ -54,6 +54,7 @@ export const reviewPR = inngest.createFunction(
     id: "review-pr",
     retries: 2,
     triggers: [{ event: "review/pr.requested" }],
+    concurrency: [{ key: "event.data.reviewId", limit: 1 }],
     onFailure: async ({ event, error }) => {
       const eventData = event.data.event.data as ReviewPREvent["data"];
       const { reviewId } = eventData;
@@ -240,12 +241,18 @@ export const reviewPR = inngest.createFunction(
         return undefined;
       }
 
-      if (repository.indexStatus !== "ready") {
-        console.warn("graph mode: repository index not ready, skipping context", {
-          repositoryId,
-          indexStatus: repository.indexStatus,
-        });
-        return undefined;
+      const freshRepository = await db.repository.findUnique({
+        where: { id: repositoryId },
+        select: { indexStatus: true, indexedCommit: true },
+      });
+
+      if (
+        freshRepository?.indexStatus !== "ready" ||
+        freshRepository.indexedCommit !== pr.head.sha
+      ) {
+        throw new Error(
+          `Graph review started before index completed (status=${freshRepository?.indexStatus ?? "unknown"}, indexedCommit=${freshRepository?.indexedCommit?.slice(0, 7) ?? "none"}, headSha=${pr.head.sha.slice(0, 7)})`,
+        );
       }
 
       return assembleRepoContext({
@@ -255,7 +262,7 @@ export const reviewPR = inngest.createFunction(
         headSha: pr.head.sha,
         accessToken: botToken,
         prTitle: pr.title,
-        indexedCommit: repository.indexedCommit,
+        indexedCommit: freshRepository.indexedCommit,
         files: files.map((file) => ({
           filename: file.filename,
           status: file.status,
@@ -274,7 +281,7 @@ export const reviewPR = inngest.createFunction(
           deletions: f.deletions,
           patch: f.patch,
         })),
-        { mode, repoContext },
+        { mode, repoContext: repoContext ?? undefined },
       );
     });
 

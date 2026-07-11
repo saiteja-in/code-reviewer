@@ -6,6 +6,10 @@ import {
   resolveIndexPlan,
   runRepositoryIndex,
 } from "../../indexer/index-incremental.ts";
+import {
+  failPendingGraphReviewsForCommit,
+  triggerPendingGraphReviewsForCommit,
+} from "../../services/graph-review-after-index.ts";
 
 async function markJobProcessing(jobId: string | undefined): Promise<void> {
   if (!jobId) return;
@@ -53,6 +57,14 @@ export const indexRepo = inngest.createFunction(
         where: { id: data.repositoryId },
         data: { indexStatus: "failed" },
       });
+
+      if (data.headSha) {
+        await failPendingGraphReviewsForCommit({
+          repositoryId: data.repositoryId,
+          headSha: data.headSha,
+          error: error.message || "Index job failed",
+        });
+      }
     },
   },
   async ({ event, step }) => {
@@ -115,6 +127,25 @@ export const indexRepo = inngest.createFunction(
       });
       await markJobCompleted(jobId, headSha, branch);
     });
+
+    if (headSha) {
+      await step.sendEvent("emit-index-completed", {
+        name: "repo/index.completed",
+        data: {
+          repositoryId,
+          headSha,
+          jobId,
+          branch: branch ?? null,
+        },
+      });
+
+      await step.run("trigger-graph-reviews", async () => {
+        return triggerPendingGraphReviewsForCommit({
+          repositoryId,
+          headSha,
+        });
+      });
+    }
 
     logger.info("index-repo: completed", {
       repositoryId,

@@ -15,6 +15,7 @@ export type ContextCandidate = {
   name: string;
   role: ContextRole;
   priority: number;
+  confidence?: "high" | "medium" | "low" | null;
   source?: string;
 };
 
@@ -127,6 +128,7 @@ export function applyContextBudget(
       endLine: candidate.endLine,
       name: candidate.name,
       role: candidate.role,
+      confidence: candidate.confidence,
       source,
     });
   }

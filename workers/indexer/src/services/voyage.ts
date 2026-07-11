@@ -5,6 +5,9 @@ const DEFAULT_MODEL = "voyage-code-3";
 const DEFAULT_DIMENSIONS = 1024;
 const DEFAULT_BATCH_SIZE = 32;
 const MAX_RETRIES = 3;
+/** Minimum wait when Voyage returns 429 (3 RPM free tier ≈ one request per 20s). */
+const RATE_LIMIT_MIN_WAIT_MS = 20_000;
+const RATE_LIMIT_MAX_RETRIES = 10;
 
 export type VoyageConfig = {
   apiKey: string;
@@ -44,11 +47,36 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function retryAfterMs(response: Response): number | null {
+  const header = response.headers.get("retry-after");
+  if (!header) {
+    return null;
+  }
+
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) {
+    return Math.max(seconds * 1000, 1000);
+  }
+
+  const dateMs = Date.parse(header);
+  if (Number.isFinite(dateMs)) {
+    return Math.max(dateMs - Date.now(), 1000);
+  }
+
+  return null;
+}
+
+function getBatchDelayMs(): number {
+  const value = Number(process.env.VOYAGE_EMBED_BATCH_DELAY_MS?.trim() || 0);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 async function requestEmbeddings(
   config: VoyageConfig,
   texts: string[],
 ): Promise<number[][]> {
   let lastError: Error | null = null;
+  let rateLimitAttempts = 0;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
     try {
@@ -65,6 +93,26 @@ async function requestEmbeddings(
           output_dimension: config.dimensions,
         }),
       });
+
+      if (response.status === 429) {
+        rateLimitAttempts += 1;
+        const body = await response.text();
+        lastError = new Error(`Voyage API 429: ${body.slice(0, 500)}`);
+
+        if (rateLimitAttempts >= RATE_LIMIT_MAX_RETRIES) {
+          throw lastError;
+        }
+
+        const waitMs = retryAfterMs(response) ?? RATE_LIMIT_MIN_WAIT_MS;
+        logger.warn("voyage: rate limited, waiting before retry", {
+          waitMs,
+          rateLimitAttempt: rateLimitAttempts,
+          maxRateLimitRetries: RATE_LIMIT_MAX_RETRIES,
+        });
+        await sleep(waitMs);
+        attempt -= 1;
+        continue;
+      }
 
       if (!response.ok) {
         const body = await response.text();
@@ -95,8 +143,10 @@ export async function embedDocuments(
 
   const embeddings: number[][] = [];
   const batches = chunkArray(texts, config.batchSize);
+  const batchDelayMs = getBatchDelayMs();
 
-  for (const batch of batches) {
+  for (let i = 0; i < batches.length; i += 1) {
+    const batch = batches[i]!;
     const batchEmbeddings = await requestEmbeddings(config, batch);
     for (const vector of batchEmbeddings) {
       if (vector.length !== config.dimensions) {
@@ -105,6 +155,10 @@ export async function embedDocuments(
         );
       }
       embeddings.push(vector);
+    }
+
+    if (batchDelayMs > 0 && i < batches.length - 1) {
+      await sleep(batchDelayMs);
     }
   }
 

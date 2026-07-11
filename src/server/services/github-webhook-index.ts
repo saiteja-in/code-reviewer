@@ -37,20 +37,48 @@ export async function requestRepoIndex(
     };
   }
 
-  const inFlight = await db.indexJob.findFirst({
+  const inFlightSameHead = await db.indexJob.findFirst({
     where: {
       repositoryId: input.repositoryId,
+      headCommit: input.headSha,
       status: { in: ["pending", "processing"] },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  if (inFlight) {
+  if (inFlightSameHead) {
     return {
       queued: false,
-      reason: "Index job already in progress",
-      jobId: inFlight.id,
+      reason: "Index job already in progress for this commit",
+      jobId: inFlightSameHead.id,
     };
+  }
+
+  const inFlightOtherHead = await db.indexJob.findFirst({
+    where: {
+      repositoryId: input.repositoryId,
+      headCommit: { not: input.headSha },
+      status: { in: ["pending", "processing"] },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (inFlightOtherHead?.status === "processing") {
+    return {
+      queued: false,
+      reason: "Index job already in progress for another commit",
+      jobId: inFlightOtherHead.id,
+    };
+  }
+
+  if (inFlightOtherHead?.status === "pending") {
+    await db.indexJob.update({
+      where: { id: inFlightOtherHead.id },
+      data: {
+        status: "failed",
+        error: `Superseded by newer index request for ${input.headSha.slice(0, 7)}`,
+      },
+    });
   }
 
   const duplicateHead = await db.indexJob.findFirst({

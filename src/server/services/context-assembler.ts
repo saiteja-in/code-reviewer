@@ -55,6 +55,15 @@ function toNumber(value: number | { toNumber?: () => number }): number {
   return Number(value);
 }
 
+function normalizeCallConfidence(
+  value: string | null | undefined,
+): "high" | "medium" | "low" | null {
+  if (value === "high" || value === "medium" || value === "low") {
+    return value;
+  }
+  return null;
+}
+
 function maxSnippetsFromEnv(): number {
   const parsed = Number(process.env.CONTEXT_MAX_SNIPPETS?.trim());
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 12;
@@ -112,6 +121,7 @@ async function findGraphCandidates(
       startLine: toNumber(row.startLine),
       endLine: toNumber(row.endLine),
       role,
+      confidence: normalizeCallConfidence(row.confidence),
       priority: basePriority + confidenceBoost,
     };
   });
