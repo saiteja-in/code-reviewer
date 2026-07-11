@@ -7,13 +7,16 @@
     "dev": "node --experimental-strip-types --watch src/main.ts",
     "start": "node --experimental-strip-types src/main.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/**/*.test.ts"
+    "test": "node --experimental-strip-types --test src/**/*.test.ts",
+    "graph:fixture": "node --experimental-strip-types scripts/build-graph-fixture.ts"
   },
   "dependencies": {
+    "@octokit/auth-app": "^8.2.0",
     "@prisma/client": "6",
     "dotenv": "^16.4.7",
     "inngest": "^4.11.0",
     "neo4j-driver": "^5.28.1",
+    "octokit": "^5.0.3",
     "tree-sitter": "^0.22.4",
     "tree-sitter-typescript": "^0.23.2"
   },

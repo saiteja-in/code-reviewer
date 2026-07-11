@@ -1,4 +1,6 @@
 import { db } from "../../db/client.ts";
+import { logger } from "../../lib/logger.ts";
+import { buildStructuralGraph } from "../../indexer/graph-build.ts";
 import { inngest } from "../client.ts";
 import type { IndexRepoEvent } from "../events.ts";
 
@@ -26,7 +28,7 @@ async function markJobCompleted(
   });
 }
 
-/** Stub indexer — replaced in Steps 16–18 with tree-sitter / SCIP. */
+/** Indexer — structural graph (Step 16+); SCIP in Step 18. */
 export const indexRepo = inngest.createFunction(
   {
     id: "index-repo",
@@ -51,7 +53,8 @@ export const indexRepo = inngest.createFunction(
     },
   },
   async ({ event, step }) => {
-    const { repositoryId, jobId, headSha, branch } = event.data;
+    const { repositoryId, jobId, headSha, branch, installationId, owner, repo } =
+      event.data;
 
     await step.run("mark-indexing", async () => {
       await markJobProcessing(jobId);
@@ -61,7 +64,23 @@ export const indexRepo = inngest.createFunction(
       });
     });
 
-    await step.run("mark-ready-stub", async () => {
+    const graphResult = await step.run("build-structural-graph", async () => {
+      if (!installationId || !owner || !repo || !headSha) {
+        throw new Error(
+          "Missing installationId, owner, repo, or headSha for structural graph build",
+        );
+      }
+
+      return buildStructuralGraph({
+        repositoryId,
+        installationId,
+        owner,
+        repo,
+        headSha,
+      });
+    });
+
+    await step.run("mark-ready", async () => {
       await db.repository.update({
         where: { id: repositoryId },
         data: {
@@ -73,6 +92,11 @@ export const indexRepo = inngest.createFunction(
       await markJobCompleted(jobId, headSha, branch);
     });
 
-    return { success: true, repositoryId, stub: true };
+    logger.info("index-repo: completed", {
+      repositoryId,
+      ...graphResult,
+    });
+
+    return { success: true, repositoryId, ...graphResult };
   },
 );

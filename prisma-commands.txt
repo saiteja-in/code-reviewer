@@ -271,6 +271,28 @@ pnpm test
 
 # Expected: parse.test.ts passes (class, methods, interface, refs)
 
+# --- Step 16: structural graph → Neo4j ---
+docker compose up -d neo4j
+
+# Option A — local fixture (no GitHub):
+cd workers/indexer
+pnpm graph:fixture
+
+# Verify in Neo4j Browser (http://localhost:7474):
+# MATCH (m:Method {repoId:'graph-fixture-repo'}) RETURN count(m);
+# MATCH (f:File {repoId:'graph-fixture-repo'})-[:CONTAINS]->(m:Method) RETURN f.path, m.name LIMIT 10;
+
+# Option B — full index via Inngest (requires App installed on repo):
+# Terminal 1: pnpm dev + inngest-cli dev
+# Terminal 2: cd workers/indexer && pnpm start
+# Push to default branch or sync PR on a small TS repo (5–10 files)
+# Then in Neo4j (replace YOUR_REPOSITORY_CUID):
+# MATCH (m:Method {repoId:'YOUR_REPOSITORY_CUID'}) RETURN count(m);
+# MATCH (f:File {repoId:'YOUR_REPOSITORY_CUID'})-[:CONTAINS]->(m:Method) RETURN f.path, m.name LIMIT 10;
+
+cd workers/indexer
+pnpm test
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6

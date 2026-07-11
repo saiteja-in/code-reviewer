@@ -18,7 +18,16 @@ workers/indexer/src/
       index-repo.ts
   indexer/
     parse.ts          # tree-sitter + tags.scm (Step 15+)
+    graph-build.ts    # fetch TS files + MERGE structural graph (Step 16+)
+    graph-write.ts
+    github-files.ts
     types.ts
+  services/
+    github-app.ts     # installation Octokit for file fetch
+  db/
+    neo4j.ts
+scripts/
+  build-graph-fixture.ts
   main.ts             # entrypoint
 tags/
   typescript.scm      # from tree-sitter-typescript (+ extensions)
