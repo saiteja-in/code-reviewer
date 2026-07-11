@@ -20,4 +20,6 @@ ENV INDEXER_WORKSPACE_DIR=/tmp/repos
 
 RUN mkdir -p /tmp/repos
 
+# tree-sitter native bindings are built during pnpm install above
+
 CMD ["pnpm", "start"]

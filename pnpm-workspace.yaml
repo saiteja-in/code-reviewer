@@ -9,6 +9,18 @@ allowBuilds:
   protobufjs: true
   sharp: true
   unrs-resolver: true
+  tree-sitter: true
+  tree-sitter-javascript: true
+  tree-sitter-typescript: true
+
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - prisma
+  - protobufjs
+  - tree-sitter
+  - tree-sitter-javascript
+  - tree-sitter-typescript
 
 ignoredBuiltDependencies:
   - sharp

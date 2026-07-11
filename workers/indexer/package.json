@@ -6,13 +6,16 @@
   "scripts": {
     "dev": "node --experimental-strip-types --watch src/main.ts",
     "start": "node --experimental-strip-types src/main.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts"
   },
   "dependencies": {
     "@prisma/client": "6",
     "dotenv": "^16.4.7",
     "inngest": "^4.11.0",
-    "neo4j-driver": "^5.28.1"
+    "neo4j-driver": "^5.28.1",
+    "tree-sitter": "^0.22.4",
+    "tree-sitter-typescript": "^0.23.2"
   },
   "devDependencies": {
     "@types/node": "^20",

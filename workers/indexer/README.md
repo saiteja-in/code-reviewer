@@ -16,7 +16,14 @@ workers/indexer/src/
     events.ts         # event type definitions
     functions/
       index-repo.ts
+  indexer/
+    parse.ts          # tree-sitter + tags.scm (Step 15+)
+    types.ts
   main.ts             # entrypoint
+tags/
+  typescript.scm      # from tree-sitter-typescript (+ extensions)
+fixtures/
+  sample-service.ts
 ```
 
 ## Prerequisites

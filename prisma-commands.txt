@@ -261,6 +261,16 @@ docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT id, sta
 # After PR sync, headCommit should match PR head SHA:
 docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT r."fullName", ij."headCommit", ij.branch, ij.status FROM "IndexJob" ij JOIN "Repository" r ON r.id = ij."repositoryId" ORDER BY ij."createdAt" DESC LIMIT 5;'
 
+# --- Step 15: tree-sitter parse (TypeScript) ---
+# Native modules — approve build scripts if pnpm warns (v10+):
+pnpm approve-builds   # select tree-sitter, tree-sitter-javascript, tree-sitter-typescript
+pnpm install
+
+cd workers/indexer
+pnpm test
+
+# Expected: parse.test.ts passes (class, methods, interface, refs)
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6
