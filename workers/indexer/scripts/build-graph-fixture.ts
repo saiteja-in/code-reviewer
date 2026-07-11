@@ -26,7 +26,9 @@ console.log("Graph fixture build complete", { repoId, ...result });
 console.log(
   "Verify in Neo4j Browser:\n" +
     `MATCH (m:Method {repoId:'${repoId}'}) RETURN count(m);\n` +
-    `MATCH (f:File {repoId:'${repoId}'})-[:CONTAINS]->(m:Method) RETURN f.path, m.name LIMIT 10;`,
+    `MATCH (f:File {repoId:'${repoId}'})-[:CONTAINS]->(m:Method) RETURN f.path, m.name LIMIT 10;\n` +
+    `MATCH (a:File {repoId:'${repoId}'})-[:IMPORTS]->(b:File) RETURN a.path, b.path;\n` +
+    `MATCH (caller:Method {repoId:'${repoId}'})-[c:CALLS]->(callee:Method) RETURN caller.qualifiedName, callee.qualifiedName, c.confidence;`,
 );
 
 await closeNeo4j();

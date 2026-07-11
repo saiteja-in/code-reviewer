@@ -39,7 +39,7 @@ describe("parseFile (TypeScript)", () => {
     assert.equal(factory?.kind, "Method");
   });
 
-  it("captures call references for later SCIP resolution", () => {
+  it("captures call references for heuristic call resolution", () => {
     const content = readFileSync(fixturePath, "utf8");
     const result = parseFile("fixtures/sample-service.ts", content);
 

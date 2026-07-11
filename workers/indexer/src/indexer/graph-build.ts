@@ -2,6 +2,7 @@ import { getInstallationOctokit } from "../services/github-app.ts";
 import { logger } from "../lib/logger.ts";
 import { fetchTypeScriptFiles, type RepoSourceFile } from "./github-files.ts";
 import { parseFile } from "./parse.ts";
+import { enrichGraphFromSources } from "./graph-enrich.ts";
 import {
   collectGraphFromParse,
   writeGraphToNeo4j,
@@ -26,6 +27,8 @@ export type GraphBuildResult = {
   filesProcessed: number;
   nodesWritten: number;
   edgesWritten: number;
+  importEdges: number;
+  callEdges: number;
 };
 
 function mergeGraphParts(parts: GraphCollectPart[]): {
@@ -84,12 +87,21 @@ export async function buildStructuralGraphFromSources(
   input: LocalGraphBuildInput,
 ): Promise<GraphBuildResult> {
   const graph = buildGraphFromFiles(input.repositoryId, input.files);
-  const written = await writeGraphToNeo4j(graph.nodes, graph.edges);
+  const { edges: enrichEdges, stats } = enrichGraphFromSources(
+    input.repositoryId,
+    input.files,
+  );
+  const written = await writeGraphToNeo4j(graph.nodes, [
+    ...graph.edges,
+    ...enrichEdges,
+  ]);
 
   return {
     filesProcessed: graph.filesProcessed,
     nodesWritten: written.nodesWritten,
     edgesWritten: written.edgesWritten,
+    importEdges: stats.importEdges,
+    callEdges: stats.callEdges,
   };
 }
 

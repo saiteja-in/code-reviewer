@@ -28,7 +28,7 @@ async function markJobCompleted(
   });
 }
 
-/** Indexer — structural graph (Step 16+); SCIP in Step 18. */
+/** Indexer — structural graph + IMPORTS/CALLS enrichment (Steps 16–17). */
 export const indexRepo = inngest.createFunction(
   {
     id: "index-repo",

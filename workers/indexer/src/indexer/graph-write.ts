@@ -20,7 +20,9 @@ export type GraphEdgeRow = {
   repoId: string;
   fromId: string;
   toId: string;
-  type: "CONTAINS" | "DECLARES";
+  type: "CONTAINS" | "DECLARES" | "IMPORTS" | "CALLS";
+  line?: number;
+  confidence?: "high" | "medium" | "low";
 };
 
 export type GraphCollectResult = {
@@ -180,6 +182,20 @@ const EDGE_CYPHER = {
     MATCH (from {id: row.fromId, repoId: row.repoId})
     MATCH (to {id: row.toId, repoId: row.repoId})
     MERGE (from)-[:DECLARES]->(to)
+  `,
+  IMPORTS: `
+    UNWIND $rows AS row
+    MATCH (from {id: row.fromId, repoId: row.repoId})
+    MATCH (to {id: row.toId, repoId: row.repoId})
+    MERGE (from)-[:IMPORTS]->(to)
+  `,
+  CALLS: `
+    UNWIND $rows AS row
+    MATCH (from {id: row.fromId, repoId: row.repoId})
+    MATCH (to {id: row.toId, repoId: row.repoId})
+    MERGE (from)-[r:CALLS]->(to)
+    SET r.line = row.line,
+        r.confidence = row.confidence
   `,
 };
 

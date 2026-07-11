@@ -1,6 +1,6 @@
 # Indexer worker
 
-Background worker for repo indexing (tree-sitter, SCIP, Neo4j). Runs via **Inngest Connect**, separate from the Next.js app.
+Background worker for repo indexing (tree-sitter graph enrichment, Neo4j). Runs via **Inngest Connect**, separate from the Next.js app.
 
 ## Layout
 
@@ -19,6 +19,9 @@ workers/indexer/src/
   indexer/
     parse.ts          # tree-sitter + tags.scm (Step 15+)
     graph-build.ts    # fetch TS files + MERGE structural graph (Step 16+)
+    graph-enrich.ts   # IMPORTS + heuristic CALLS (Step 17)
+    imports.ts
+    call-resolver.ts
     graph-write.ts
     github-files.ts
     types.ts
@@ -33,7 +36,17 @@ tags/
   typescript.scm      # from tree-sitter-typescript (+ extensions)
 fixtures/
   sample-service.ts
+  user-controller.ts
 ```
+
+## Graph enrichment (Step 17)
+
+After structural nodes (`CONTAINS`, `DECLARES`), the indexer adds:
+
+- **IMPORTS** — `File → File` for resolved relative imports (`./sample-service` → `fixtures/sample-service.ts`)
+- **CALLS** — `Method → Method` with `line` and `confidence` (`high` | `medium` | `low`)
+
+Resolution is heuristic (no clone, no SCIP): same-class method calls, import binding match, or method-name match in imported files.
 
 ## Prerequisites
 

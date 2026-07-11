@@ -4,11 +4,12 @@
 //
 // Node labels: File, Class, Interface, Method, Field
 // Shared properties: id (unique), repoId, name, path, startLine, endLine, language
-// Optional (M3+): scipSymbol, hash (incremental indexing)
+// Optional (M3+): hash (incremental indexing)
 //
-// Relationship types (created in Steps 16–18):
+// Relationship types (created in Steps 16–17):
 //   M2: CONTAINS, DECLARES
-//   M3: CALLS, EXTENDS, IMPLEMENTS, HAS_TYPE, RETURNS, OVERRIDES
+//   M3: IMPORTS, CALLS (heuristic tree-sitter resolution)
+//   Future: EXTENDS, IMPLEMENTS, HAS_TYPE, RETURNS, OVERRIDES
 // =============================================================================
 
 // --- Uniqueness constraints (node id is globally unique within the graph) ---
@@ -63,9 +64,6 @@ CREATE INDEX file_repo_path IF NOT EXISTS
 FOR (n:File) ON (n.repoId, n.path);
 
 // --- M3+ optional property indexes ---
-
-CREATE INDEX method_scip_symbol IF NOT EXISTS
-FOR (n:Method) ON (n.scipSymbol);
 
 CREATE INDEX file_hash IF NOT EXISTS
 FOR (n:File) ON (n.hash);

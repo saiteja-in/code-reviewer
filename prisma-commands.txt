@@ -293,6 +293,22 @@ pnpm graph:fixture
 cd workers/indexer
 pnpm test
 
+# --- Step 17: IMPORTS + heuristic CALLS ---
+docker compose up -d neo4j
+
+cd workers/indexer
+pnpm graph:fixture
+
+# Verify in Neo4j Browser (http://localhost:7474):
+# MATCH (a:File {repoId:'graph-fixture-repo'})-[:IMPORTS]->(b:File) RETURN a.path, b.path;
+# MATCH (caller:Method {repoId:'graph-fixture-repo'})-[c:CALLS]->(callee:Method)
+#   RETURN caller.qualifiedName, callee.qualifiedName, c.confidence;
+
+cd workers/indexer
+pnpm test
+
+# Expected: imports.test.ts, call-resolver.test.ts pass; graph-build.test.ts asserts IMPORTS/CALLS when NEO4J_URI is set
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6
