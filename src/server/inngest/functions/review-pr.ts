@@ -25,6 +25,7 @@ import {
   checkRunConclusionFromReview,
   checkRunOutputFromReview,
 } from "@/server/services/review-format";
+import { assembleRepoContext } from "@/server/services/context-assembler";
 
 export type ReviewPREvent = {
   name: "review/pr.requested";
@@ -232,9 +233,38 @@ export const reviewPR = inngest.createFunction(
       return fetchPullRequestFiles(fetchToken, owner, repo, prNumber);
     });
 
+    const mode = resolveReviewMode(event.data.mode);
+
+    const repoContext = await step.run("assemble-repo-context", async () => {
+      if (mode !== "graph") {
+        return undefined;
+      }
+
+      if (repository.indexStatus !== "ready") {
+        console.warn("graph mode: repository index not ready, skipping context", {
+          repositoryId,
+          indexStatus: repository.indexStatus,
+        });
+        return undefined;
+      }
+
+      return assembleRepoContext({
+        repositoryId,
+        owner,
+        repo,
+        headSha: pr.head.sha,
+        accessToken: botToken,
+        prTitle: pr.title,
+        indexedCommit: repository.indexedCommit,
+        files: files.map((file) => ({
+          filename: file.filename,
+          status: file.status,
+          patch: file.patch,
+        })),
+      });
+    });
+
     const reviewResult = await step.run("generate-review", async () => {
-      const mode = resolveReviewMode(event.data.mode);
-      // Step 19: pass repoContext when mode=graph and index is ready.
       return reviewCode(
         pr.title,
         files.map((f) => ({
@@ -244,7 +274,7 @@ export const reviewPR = inngest.createFunction(
           deletions: f.deletions,
           patch: f.patch,
         })),
-        { mode },
+        { mode, repoContext },
       );
     });
 

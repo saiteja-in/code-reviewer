@@ -489,3 +489,54 @@ export async function updateCheckRun(
     },
   );
 }
+
+/** Fetch raw file text at a ref (GitHub Contents API). Returns null if missing. */
+export async function fetchRepositoryFileContent(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  path: string,
+  ref: string,
+): Promise<string | null> {
+  const encodedPath = path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  try {
+    const response = await githubFetch(
+      accessToken,
+      `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`,
+    );
+
+    const data = (await response.json()) as {
+      type?: string;
+      content?: string;
+      encoding?: string;
+    };
+
+    if (data.type !== "file" || !data.content) {
+      return null;
+    }
+
+    if (data.encoding === "base64") {
+      return Buffer.from(data.content, "base64").toString("utf8");
+    }
+
+    return data.content;
+  } catch (err) {
+    if (err instanceof GitHubApiError && err.status === 404) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+export function extractFileLines(
+  content: string,
+  startLine: number,
+  endLine: number,
+): string {
+  const lines = content.split(/\r?\n/);
+  return lines.slice(startLine - 1, endLine).join("\n");
+}

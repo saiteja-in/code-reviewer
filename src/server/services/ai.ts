@@ -32,7 +32,7 @@ export const ReviewResultSchema = z.object({
 export type ReviewComment = z.infer<typeof ReviewCommentSchema>;
 export type ReviewResult = z.infer<typeof ReviewResultSchema>;
 
-/** Code from outside the PR diff (callers, definitions) — wired in Step 19. */
+/** Code from outside the PR diff (callers, definitions, semantic neighbors). */
 export interface RepoContextSnippet {
   path: string;
   startLine: number;

@@ -324,6 +324,21 @@ pnpm test
 
 # Expected: chunk.test.ts, chunk-store.test.ts pass; embed:fixture requires VOYAGE_API_KEY
 
+# --- Step 19: context-assembler + graph review mode ---
+pnpm test
+
+# Prereqs: repo indexed (indexStatus=ready), Neo4j + FileChunk populated, VOYAGE_API_KEY set
+# Optional perf: docker compose exec -T postgres psql -U postgres -d codereviewer < scripts/sql/002-filechunk-hnsw.sql
+
+# A/B on same PR commit:
+# REVIEW_MODE=diff  (baseline)
+# REVIEW_MODE=graph OR review.trigger({ repositoryId, prNumber, mode: "graph" })
+
+# Graph review should include "Relevant code from the rest of the repository" in the Claude prompt
+# when assemble-repo-context returns snippets (check Inngest step output / logs).
+
+docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT "prNumber", mode, status, "headSha" FROM "Review" ORDER BY "createdAt" DESC LIMIT 5;'
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6
