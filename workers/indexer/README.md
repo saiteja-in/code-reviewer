@@ -20,6 +20,9 @@ workers/indexer/src/
     parse.ts          # tree-sitter + tags.scm (Step 15+)
     graph-build.ts    # fetch TS files + MERGE structural graph (Step 16+)
     graph-enrich.ts   # IMPORTS + heuristic CALLS (Step 17)
+    chunk.ts          # symbol-aware chunking (Step 18)
+    embed-index.ts    # Voyage embed + FileChunk upsert (Step 18)
+    chunk-store.ts
     imports.ts
     call-resolver.ts
     graph-write.ts
@@ -31,6 +34,7 @@ workers/indexer/src/
     neo4j.ts
 scripts/
   build-graph-fixture.ts
+  build-embed-fixture.ts
   main.ts             # entrypoint
 tags/
   typescript.scm      # from tree-sitter-typescript (+ extensions)
@@ -47,6 +51,24 @@ After structural nodes (`CONTAINS`, `DECLARES`), the indexer adds:
 - **CALLS** — `Method → Method` with `line` and `confidence` (`high` | `medium` | `low`)
 
 Resolution is heuristic (no clone, no SCIP): same-class method calls, import binding match, or method-name match in imported files.
+
+## Embeddings (Step 18)
+
+After graph indexing, `index-repo` chunks each TypeScript file by tree-sitter symbol (Class, Interface, Method), embeds with **Voyage `voyage-code-3`** (1024-d), and upserts rows into Postgres `FileChunk` (pgvector).
+
+Requires `VOYAGE_API_KEY` in repo root `.env` or `workers/indexer/.env`.
+
+```powershell
+cd workers/indexer
+pnpm embed:fixture
+```
+
+Verify:
+
+```sql
+SELECT COUNT(*) FROM "FileChunk" WHERE "repositoryId" = 'YOUR_REPOSITORY_CUID';
+SELECT path, symbol, "startLine", "endLine" FROM "FileChunk" WHERE "repositoryId" = 'YOUR_REPOSITORY_CUID' LIMIT 10;
+```
 
 ## Prerequisites
 

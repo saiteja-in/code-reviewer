@@ -1,6 +1,7 @@
 import { db } from "../../db/client.ts";
 import { logger } from "../../lib/logger.ts";
 import { buildStructuralGraph } from "../../indexer/graph-build.ts";
+import { indexEmbeddings } from "../../indexer/embed-index.ts";
 import { inngest } from "../client.ts";
 import type { IndexRepoEvent } from "../events.ts";
 
@@ -28,7 +29,7 @@ async function markJobCompleted(
   });
 }
 
-/** Indexer — structural graph + IMPORTS/CALLS enrichment (Steps 16–17). */
+/** Indexer — structural graph, IMPORTS/CALLS, pgvector embeddings (Steps 16–18). */
 export const indexRepo = inngest.createFunction(
   {
     id: "index-repo",
@@ -80,6 +81,23 @@ export const indexRepo = inngest.createFunction(
       });
     });
 
+    const embedResult = await step.run("embed-file-chunks", async () => {
+      if (!installationId || !owner || !repo || !headSha) {
+        throw new Error(
+          "Missing installationId, owner, repo, or headSha for embedding index",
+        );
+      }
+
+      return indexEmbeddings({
+        repositoryId,
+        commitSha: headSha,
+        installationId,
+        owner,
+        repo,
+        headSha,
+      });
+    });
+
     await step.run("mark-ready", async () => {
       await db.repository.update({
         where: { id: repositoryId },
@@ -95,8 +113,9 @@ export const indexRepo = inngest.createFunction(
     logger.info("index-repo: completed", {
       repositoryId,
       ...graphResult,
+      ...embedResult,
     });
 
-    return { success: true, repositoryId, ...graphResult };
+    return { success: true, repositoryId, ...graphResult, ...embedResult };
   },
 );

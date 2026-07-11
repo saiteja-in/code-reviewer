@@ -8,7 +8,8 @@
     "start": "node --experimental-strip-types src/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test src/**/*.test.ts",
-    "graph:fixture": "node --experimental-strip-types scripts/build-graph-fixture.ts"
+    "graph:fixture": "node --experimental-strip-types scripts/build-graph-fixture.ts",
+    "embed:fixture": "node --experimental-strip-types scripts/build-embed-fixture.ts"
   },
   "dependencies": {
     "@octokit/auth-app": "^8.2.0",

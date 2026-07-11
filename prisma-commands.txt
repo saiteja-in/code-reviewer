@@ -309,6 +309,21 @@ pnpm test
 
 # Expected: imports.test.ts, call-resolver.test.ts pass; graph-build.test.ts asserts IMPORTS/CALLS when NEO4J_URI is set
 
+# --- Step 18: symbol chunks + Voyage embeddings → FileChunk (pgvector) ---
+# Add VOYAGE_API_KEY to repo root .env or workers/indexer/.env
+
+cd workers/indexer
+pnpm embed:fixture
+
+# Verify in Postgres:
+# SELECT COUNT(*) FROM "FileChunk" WHERE "repositoryId" = 'embed-fixture-repo';
+# SELECT path, symbol, "startLine", "endLine" FROM "FileChunk" WHERE "repositoryId" = 'embed-fixture-repo' ORDER BY path, "startLine";
+
+cd workers/indexer
+pnpm test
+
+# Expected: chunk.test.ts, chunk-store.test.ts pass; embed:fixture requires VOYAGE_API_KEY
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6

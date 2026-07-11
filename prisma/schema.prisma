@@ -168,7 +168,7 @@ model Review {
   @@index([mode])
 }
 
-/// Code chunks with embeddings for hybrid retrieval (Step 19+).
+/// Code chunks with embeddings for hybrid retrieval (Step 18+).
 /// Query vectors via prisma.$queryRaw; HNSW index added in scripts/sql/002-filechunk-hnsw.sql (Step 19).
 model FileChunk {
   id           String                      @id @default(cuid())
