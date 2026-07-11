@@ -8,5 +8,6 @@ export type IndexRepoEvent = {
     repo?: string;
     headSha?: string;
     branch?: string;
+    baseCommit?: string | null;
   };
 };

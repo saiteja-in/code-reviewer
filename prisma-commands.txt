@@ -339,6 +339,23 @@ pnpm test
 
 docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT "prNumber", mode, status, "headSha" FROM "Review" ORDER BY "createdAt" DESC LIMIT 5;'
 
+# --- Step 20: golden evals + incremental re-index + POC results ---
+pnpm eval:golden:print
+pnpm eval:golden
+
+# Fill A/B outcomes in docs/POC_RESULTS.md after live diff vs graph runs on same commit.
+
+# Incremental index: push a small TS change to default branch (webhook passes before → baseCommit)
+docker compose logs -f indexer-worker
+# Expect index-repository step: mode=incremental for small diffs, mode=full when baseCommit missing
+
+docker compose exec postgres psql -U postgres -d codereviewer -c 'SELECT status, "headCommit", "baseCommit", branch FROM "IndexJob" ORDER BY "createdAt" DESC LIMIT 5;'
+
+cd workers/indexer
+pnpm test
+
+# Expected: index-incremental.test.ts, github-compare planning tests pass
+
 // this is version 6 , not the latest version
 pnpm add -D prisma@6
 pnpm add -D @prisma/client@6

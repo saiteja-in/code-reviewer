@@ -52,6 +52,10 @@ After structural nodes (`CONTAINS`, `DECLARES`), the indexer adds:
 
 Resolution is heuristic (no clone, no SCIP): same-class method calls, import binding match, or method-name match in imported files.
 
+## Incremental indexing (Step 20)
+
+When a push webhook includes `before` → `baseCommit`, the worker compares commits and re-indexes only changed TypeScript paths (Neo4j path purge + FileChunk upsert). Large diffs fall back to full re-index (`INDEX_INCREMENTAL_MAX_FILES`, default 80).
+
 ## Embeddings (Step 18)
 
 After graph indexing, `index-repo` chunks each TypeScript file by tree-sitter symbol (Class, Interface, Method), embeds with **Voyage `voyage-code-3`** (1024-d), and upserts rows into Postgres `FileChunk` (pgvector).

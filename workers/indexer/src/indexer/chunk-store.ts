@@ -65,6 +65,51 @@ async function insertChunkRow(
   );
 }
 
+export async function deleteFileChunksForPaths(
+  repositoryId: string,
+  paths: string[],
+): Promise<number> {
+  if (paths.length === 0) {
+    return 0;
+  }
+
+  await db.$executeRawUnsafe(
+    `DELETE FROM "FileChunk"
+     WHERE "repositoryId" = $1
+       AND path = ANY($2::text[])`,
+    repositoryId,
+    paths,
+  );
+
+  return paths.length;
+}
+
+export async function upsertFileChunks(
+  repositoryId: string,
+  commitSha: string,
+  chunks: ChunkWithEmbedding[],
+): Promise<number> {
+  if (chunks.length === 0) {
+    return 0;
+  }
+
+  const paths = [...new Set(chunks.map((chunk) => chunk.path))];
+  await deleteFileChunksForPaths(repositoryId, paths);
+
+  for (const row of chunks) {
+    await insertChunkRow(db, repositoryId, commitSha, row);
+  }
+
+  logger.info("chunk-store: upserted file chunks", {
+    repositoryId,
+    commitSha,
+    paths: paths.length,
+    chunksWritten: chunks.length,
+  });
+
+  return chunks.length;
+}
+
 export async function replaceFileChunks(
   repositoryId: string,
   commitSha: string,

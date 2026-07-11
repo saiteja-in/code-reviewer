@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "description": "Golden cases for graph-mode context assembly and A/B review comparison.",
+  "cases": [
+    {
+      "id": "cross-file-caller-impact",
+      "description": "Changing UserService.find should surface handleUser caller outside the diff.",
+      "repositoryId": "graph-fixture-repo",
+      "prTitle": "Change UserService.find return type",
+      "changedFiles": [
+        {
+          "filename": "fixtures/sample-service.ts",
+          "status": "modified",
+          "patch": "@@ -1,8 +1,8 @@\n export class UserService {\n-  find(id: string): string {\n+  find(id: string): number {\n     return id;\n   }"
+        }
+      ],
+      "expectContext": {
+        "mustIncludePaths": ["fixtures/user-controller.ts"],
+        "mustIncludeRoles": ["impacted"]
+      },
+      "expectGraphReview": {
+        "mustMentionExternalPath": "user-controller",
+        "category": "bug"
+      }
+    }
+  ]
+}

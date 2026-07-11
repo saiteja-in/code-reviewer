@@ -90,6 +90,7 @@ export async function requestRepoIndex(
       repo: input.repo,
       headSha: input.headSha,
       branch: input.branch,
+      baseCommit: input.baseCommit ?? null,
     },
   });
 

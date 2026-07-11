@@ -99,3 +99,47 @@ export async function fetchTypeScriptFiles(
 
   return files;
 }
+
+export async function fetchTypeScriptFilesAtPaths(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  ref: string,
+  paths: string[],
+): Promise<RepoSourceFile[]> {
+  const files: RepoSourceFile[] = [];
+
+  for (const path of paths) {
+    if (!shouldIndexPath(path)) {
+      continue;
+    }
+
+    try {
+      const response = await octokit.rest.repos.getContent({
+        owner,
+        repo,
+        path,
+        ref,
+      });
+
+      if (Array.isArray(response.data) || response.data.type !== "file") {
+        continue;
+      }
+
+      if (!response.data.content) {
+        continue;
+      }
+
+      const raw = decodeContent(response.data.content, response.data.encoding);
+      if (Buffer.byteLength(raw, "utf8") > MAX_FILE_BYTES) {
+        continue;
+      }
+
+      files.push({ path, content: raw });
+    } catch {
+      // Skip unreadable paths.
+    }
+  }
+
+  return files;
+}

@@ -1,9 +1,11 @@
 import { db } from "../../db/client.ts";
 import { logger } from "../../lib/logger.ts";
-import { buildStructuralGraph } from "../../indexer/graph-build.ts";
-import { indexEmbeddings } from "../../indexer/embed-index.ts";
 import { inngest } from "../client.ts";
 import type { IndexRepoEvent } from "../events.ts";
+import {
+  resolveIndexPlan,
+  runRepositoryIndex,
+} from "../../indexer/index-incremental.ts";
 
 async function markJobProcessing(jobId: string | undefined): Promise<void> {
   if (!jobId) return;
@@ -29,7 +31,7 @@ async function markJobCompleted(
   });
 }
 
-/** Indexer — structural graph, IMPORTS/CALLS, pgvector embeddings (Steps 16–18). */
+/** Indexer — graph + embeddings with full or incremental re-index (Steps 16–20). */
 export const indexRepo = inngest.createFunction(
   {
     id: "index-repo",
@@ -54,8 +56,16 @@ export const indexRepo = inngest.createFunction(
     },
   },
   async ({ event, step }) => {
-    const { repositoryId, jobId, headSha, branch, installationId, owner, repo } =
-      event.data;
+    const {
+      repositoryId,
+      jobId,
+      headSha,
+      branch,
+      installationId,
+      owner,
+      repo,
+      baseCommit,
+    } = event.data;
 
     await step.run("mark-indexing", async () => {
       await markJobProcessing(jobId);
@@ -65,37 +75,33 @@ export const indexRepo = inngest.createFunction(
       });
     });
 
-    const graphResult = await step.run("build-structural-graph", async () => {
+    const indexResult = await step.run("index-repository", async () => {
       if (!installationId || !owner || !repo || !headSha) {
         throw new Error(
-          "Missing installationId, owner, repo, or headSha for structural graph build",
+          "Missing installationId, owner, repo, or headSha for repository index",
         );
       }
 
-      return buildStructuralGraph({
+      const plan = await resolveIndexPlan({
         repositoryId,
         installationId,
         owner,
         repo,
         headSha,
+        baseCommit,
       });
-    });
 
-    const embedResult = await step.run("embed-file-chunks", async () => {
-      if (!installationId || !owner || !repo || !headSha) {
-        throw new Error(
-          "Missing installationId, owner, repo, or headSha for embedding index",
-        );
-      }
-
-      return indexEmbeddings({
-        repositoryId,
-        commitSha: headSha,
-        installationId,
-        owner,
-        repo,
-        headSha,
-      });
+      return runRepositoryIndex(
+        {
+          repositoryId,
+          installationId,
+          owner,
+          repo,
+          headSha,
+          baseCommit,
+        },
+        plan,
+      );
     });
 
     await step.run("mark-ready", async () => {
@@ -112,10 +118,14 @@ export const indexRepo = inngest.createFunction(
 
     logger.info("index-repo: completed", {
       repositoryId,
-      ...graphResult,
-      ...embedResult,
+      mode: indexResult.mode,
+      reason: indexResult.reason,
+      changedPaths: indexResult.changedPaths.length,
+      removedPaths: indexResult.removedPaths.length,
+      ...indexResult.graph,
+      ...indexResult.embed,
     });
 
-    return { success: true, repositoryId, ...graphResult, ...embedResult };
+    return { success: true, repositoryId, ...indexResult };
   },
 );

@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --experimental-strip-types --test src/server/services/*.test.ts",
+    "eval:golden": "node --experimental-strip-types --test src/server/services/golden-eval.test.ts",
+    "eval:golden:print": "node scripts/run-golden-eval.mjs",
     "verify:github-app-env": "node scripts/verify-github-app-env.mjs",
     "verify:github-app-api": "node --experimental-strip-types scripts/verify-github-app-api.ts",
     "send:index-event": "node scripts/send-index-event.mjs"
