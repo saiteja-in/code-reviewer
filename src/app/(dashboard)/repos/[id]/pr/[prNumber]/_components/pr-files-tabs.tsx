@@ -55,7 +55,16 @@ export function PrFilesTabs({
   const files = trpc.pullRequest.files.useQuery({ repositoryId, prNumber });
 
   const triggerReview = trpc.review.trigger.useMutation({
-    onSuccess: () => latestReview.refetch(),
+    onSuccess: (data) => {
+      latestReview.refetch();
+      if (data.message) {
+        // Surface index-wait vs queued so re-runs aren't mistaken for failures.
+        console.info("[review.trigger]", data.message, {
+          reviewId: data.reviewId,
+          reviewQueued: data.reviewQueued,
+        });
+      }
+    },
   });
 
   const requeueReview = trpc.review.requeue.useMutation({

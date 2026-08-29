@@ -26,7 +26,7 @@ export type SchedulePrReviewInput = {
   mode: ReviewMode;
   installationId: number | null;
   indexResult: RequestRepoIndexResult | null;
-  /** Existing PENDING review to update instead of creating a new row. */
+  /** Existing review to update instead of creating a new row. */
   existingReviewId?: string;
 };
 
@@ -36,9 +36,32 @@ export type SchedulePrReviewResult = {
   message: string;
 };
 
+const REVIEW_RESET_FIELDS = {
+  status: "PENDING" as const,
+  summary: null,
+  riskScore: null,
+  comments: null,
+  error: null,
+  githubReviewId: null,
+  githubReviewUrl: null,
+  checkRunId: null,
+  postedAt: null,
+  commitStatusSha: null,
+  postError: null,
+};
+
+/** Reviews stuck in PROCESSING longer than this can be re-queued. */
+const STALE_PROCESSING_MS = 15 * 60 * 1000;
+
+function isStaleProcessing(updatedAt: Date): boolean {
+  return Date.now() - updatedAt.getTime() > STALE_PROCESSING_MS;
+}
+
 /**
  * Create or refresh a review row and queue review-pr when appropriate.
  * Graph mode: queue only after index is ready; otherwise leave PENDING for index-repo to trigger.
+ *
+ * Reuses the unique (repositoryId, prNumber, headSha, mode) row on re-run instead of inserting again.
  */
 export async function schedulePrReview(
   input: SchedulePrReviewInput,
@@ -49,37 +72,89 @@ export async function schedulePrReview(
   );
   const deferForIndex = shouldDeferGraphReviewUntilIndex(input.mode, indexReady);
 
-  let reviewId = input.existingReviewId;
+  const existingById = input.existingReviewId
+    ? await db.review.findUnique({ where: { id: input.existingReviewId } })
+    : null;
 
-  if (reviewId) {
-    await db.review.update({
-      where: { id: reviewId },
-      data: {
-        headSha: input.headSha,
-        prTitle: input.prTitle,
-        mode: input.mode,
-      },
-    });
-  } else {
-    const review = await db.review.create({
-      data: {
+  const existingByKey = await db.review.findUnique({
+    where: {
+      repositoryId_prNumber_headSha_mode: {
         repositoryId: input.repositoryId,
-        userId: input.userId,
         prNumber: input.prNumber,
-        prTitle: input.prTitle,
-        prUrl: input.prUrl,
         headSha: input.headSha,
         mode: input.mode,
-        status: "PENDING",
+      },
+    },
+  });
+
+  // Prefer the unique-key row for this commit. Only fall back to existingReviewId
+  // when it is for the same head (or has no head yet) so we do not violate the unique index.
+  const existing =
+    existingByKey ??
+    (existingById &&
+    (existingById.headSha === input.headSha || existingById.headSha == null)
+      ? existingById
+      : null);
+
+  // If webhook passed a PENDING row for an older head, abandon it so the new
+  // commit can create/reuse its own review row.
+  if (
+    existingById &&
+    !existing &&
+    existingById.headSha &&
+    existingById.headSha !== input.headSha &&
+    existingById.status === "PENDING"
+  ) {
+    await db.review.update({
+      where: { id: existingById.id },
+      data: {
+        status: "FAILED",
+        error: `Superseded by newer head ${input.headSha.slice(0, 7)}`,
       },
     });
-    reviewId = review.id;
   }
+
+  if (
+    existing?.status === "PROCESSING" &&
+    !isStaleProcessing(existing.updatedAt)
+  ) {
+    return {
+      reviewId: existing.id,
+      reviewQueued: false,
+      message: "Review already in progress",
+    };
+  }
+
+  const review = existing
+    ? await db.review.update({
+        where: { id: existing.id },
+        data: {
+          ...REVIEW_RESET_FIELDS,
+          headSha: input.headSha,
+          prTitle: input.prTitle,
+          prUrl: input.prUrl,
+          mode: input.mode,
+        },
+      })
+    : await db.review.create({
+        data: {
+          repositoryId: input.repositoryId,
+          userId: input.userId,
+          prNumber: input.prNumber,
+          prTitle: input.prTitle,
+          prUrl: input.prUrl,
+          headSha: input.headSha,
+          mode: input.mode,
+          status: "PENDING",
+        },
+      });
+
+  const reviewId = review.id;
 
   if (deferForIndex) {
     const indexNote =
       input.indexResult?.queued === true
-        ? "Index job queued"
+        ? "Index job queued / re-sent"
         : (input.indexResult?.reason ?? "Waiting for repository index");
     return {
       reviewId,
@@ -105,7 +180,11 @@ export async function schedulePrReview(
   return {
     reviewId,
     reviewQueued: true,
-    message: input.mode === "graph" ? "Review triggered after index" : "Review triggered",
+    message: existing
+      ? "Review re-queued"
+      : input.mode === "graph"
+        ? "Review triggered after index"
+        : "Review triggered",
   };
 }
 

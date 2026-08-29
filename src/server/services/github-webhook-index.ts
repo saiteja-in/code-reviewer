@@ -15,9 +15,43 @@ export type RequestRepoIndexResult =
   | { queued: true; jobId: string }
   | { queued: false; reason: string; jobId?: string };
 
+/** Pending/processing jobs older than this are treated as stuck and re-queued. */
+const STALE_INDEX_JOB_MS = 10 * 60 * 1000;
+
+function isStale(createdAt: Date, updatedAt?: Date): boolean {
+  const anchor = updatedAt ?? createdAt;
+  return Date.now() - anchor.getTime() > STALE_INDEX_JOB_MS;
+}
+
+async function sendIndexRequestedEvent(input: {
+  repositoryId: string;
+  jobId: string;
+  installationId?: number | null;
+  owner: string;
+  repo: string;
+  headSha: string;
+  branch: string;
+  baseCommit?: string | null;
+}): Promise<void> {
+  await inngest.send({
+    name: "repo/index.requested",
+    data: {
+      repositoryId: input.repositoryId,
+      jobId: input.jobId,
+      installationId: input.installationId ?? null,
+      owner: input.owner,
+      repo: input.repo,
+      headSha: input.headSha,
+      branch: input.branch,
+      baseCommit: input.baseCommit ?? null,
+    },
+  });
+}
+
 /**
  * Enqueue a repo index job (Inngest → indexer worker).
  * Dedupes in-flight jobs and skips when head is already indexed.
+ * Re-sends events for stuck/pending jobs so a missed worker pickup can recover.
  */
 export async function requestRepoIndex(
   input: RequestRepoIndexInput,
@@ -47,11 +81,47 @@ export async function requestRepoIndex(
   });
 
   if (inFlightSameHead) {
-    return {
-      queued: false,
-      reason: "Index job already in progress for this commit",
-      jobId: inFlightSameHead.id,
-    };
+    if (
+      inFlightSameHead.status === "processing" &&
+      !isStale(inFlightSameHead.createdAt, inFlightSameHead.updatedAt)
+    ) {
+      return {
+        queued: false,
+        reason: "Index job already in progress for this commit",
+        jobId: inFlightSameHead.id,
+      };
+    }
+
+    // Pending jobs (or stale processing) often mean the Inngest event was lost
+    // while the worker was reconnecting — mark stale processing failed and re-send.
+    if (
+      inFlightSameHead.status === "processing" &&
+      isStale(inFlightSameHead.createdAt, inFlightSameHead.updatedAt)
+    ) {
+      await db.indexJob.update({
+        where: { id: inFlightSameHead.id },
+        data: {
+          status: "failed",
+          error: "Stale processing job — re-queued",
+        },
+      });
+    } else {
+      await sendIndexRequestedEvent({
+        repositoryId: input.repositoryId,
+        jobId: inFlightSameHead.id,
+        installationId: input.installationId,
+        owner: input.owner,
+        repo: input.repo,
+        headSha: input.headSha,
+        branch: input.branch,
+        baseCommit: input.baseCommit,
+      });
+
+      return {
+        queued: true,
+        jobId: inFlightSameHead.id,
+      };
+    }
   }
 
   const inFlightOtherHead = await db.indexJob.findFirst({
@@ -63,7 +133,10 @@ export async function requestRepoIndex(
     orderBy: { createdAt: "desc" },
   });
 
-  if (inFlightOtherHead?.status === "processing") {
+  if (
+    inFlightOtherHead?.status === "processing" &&
+    !isStale(inFlightOtherHead.createdAt, inFlightOtherHead.updatedAt)
+  ) {
     return {
       queued: false,
       reason: "Index job already in progress for another commit",
@@ -71,7 +144,7 @@ export async function requestRepoIndex(
     };
   }
 
-  if (inFlightOtherHead?.status === "pending") {
+  if (inFlightOtherHead) {
     await db.indexJob.update({
       where: { id: inFlightOtherHead.id },
       data: {
@@ -81,20 +154,26 @@ export async function requestRepoIndex(
     });
   }
 
-  const duplicateHead = await db.indexJob.findFirst({
+  // A completed IndexJob for this SHA only means "done" if the repo is actually
+  // ready at that commit. Otherwise Neo4j/chunks may have moved on — re-index.
+  const duplicateCompleted = await db.indexJob.findFirst({
     where: {
       repositoryId: input.repositoryId,
       headCommit: input.headSha,
-      status: { in: ["pending", "processing", "completed"] },
+      status: "completed",
     },
     orderBy: { createdAt: "desc" },
   });
 
-  if (duplicateHead) {
+  if (
+    duplicateCompleted &&
+    repository?.indexStatus === "ready" &&
+    repository.indexedCommit === input.headSha
+  ) {
     return {
       queued: false,
       reason: "Index job already exists for this commit",
-      jobId: duplicateHead.id,
+      jobId: duplicateCompleted.id,
     };
   }
 
@@ -108,18 +187,15 @@ export async function requestRepoIndex(
     },
   });
 
-  await inngest.send({
-    name: "repo/index.requested",
-    data: {
-      repositoryId: input.repositoryId,
-      jobId: job.id,
-      installationId: input.installationId ?? null,
-      owner: input.owner,
-      repo: input.repo,
-      headSha: input.headSha,
-      branch: input.branch,
-      baseCommit: input.baseCommit ?? null,
-    },
+  await sendIndexRequestedEvent({
+    repositoryId: input.repositoryId,
+    jobId: job.id,
+    installationId: input.installationId,
+    owner: input.owner,
+    repo: input.repo,
+    headSha: input.headSha,
+    branch: input.branch,
+    baseCommit: input.baseCommit,
   });
 
   return { queued: true, jobId: job.id };

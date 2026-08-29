@@ -37,6 +37,7 @@ services:
       start_period: 30s
 
   indexer-worker:
+    profiles: ["indexer"]
     build:
       context: .
       dockerfile: workers/indexer/Dockerfile

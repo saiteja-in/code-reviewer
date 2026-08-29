@@ -199,73 +199,54 @@ async function handlePullRequestEvent(payload: PullRequestPayload) {
     });
   }
 
-  const existingReview = await db.review.findFirst({
-    where: {
-      repositoryId: repository.id,
-      prNumber: payload.pull_request.number,
-      status: { in: ["PENDING", "PROCESSING"] },
-    },
-  });
-
-  if (existingReview?.status === "PROCESSING") {
-    return NextResponse.json(
-      {
-        message: "Review already in progress",
-        index: indexResult,
-      },
-      { status: 200 },
-    );
-  }
-
   const installationId =
     payload.installation?.id ??
     (repository.installation?.installationId
       ? Number(repository.installation.installationId)
       : null);
 
-  if (existingReview?.status === "PENDING") {
-    const scheduled = await schedulePrReview({
-      repositoryId: repository.id,
-      userId: repository.userId,
-      prNumber: payload.pull_request.number,
-      prTitle: payload.pull_request.title,
-      prUrl: payload.pull_request.html_url,
-      headSha,
-      mode,
-      installationId,
-      indexResult,
-      existingReviewId: existingReview.id,
-    });
-
-    return NextResponse.json({
-      message: scheduled.message,
-      reviewId: scheduled.reviewId,
-      reviewQueued: scheduled.reviewQueued,
-      index: indexResult,
-    });
-  }
-
-  const duplicate = await db.review.findFirst({
+  // Prefer an in-flight review for this exact head; otherwise any PENDING/PROCESSING for the PR.
+  const existingForHead = await db.review.findFirst({
     where: {
       repositoryId: repository.id,
       prNumber: payload.pull_request.number,
       headSha,
       mode,
-      status: { not: "FAILED" },
+      status: { in: ["PENDING", "PROCESSING"] },
     },
+    orderBy: { createdAt: "desc" },
   });
 
-  if (duplicate) {
+  const existingForPr = existingForHead
+    ? null
+    : await db.review.findFirst({
+        where: {
+          repositoryId: repository.id,
+          prNumber: payload.pull_request.number,
+          status: { in: ["PENDING", "PROCESSING"] },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+  const existingReview = existingForHead ?? existingForPr;
+
+  // Fresh PROCESSING for this head — do not double-start.
+  if (
+    existingForHead?.status === "PROCESSING" &&
+    Date.now() - existingForHead.updatedAt.getTime() < 15 * 60 * 1000
+  ) {
     return NextResponse.json(
       {
-        message: "Review already exists for this commit",
-        reviewId: duplicate.id,
+        message: "Review already in progress",
+        reviewId: existingForHead.id,
         index: indexResult,
       },
       { status: 200 },
     );
   }
 
+  // Always go through schedulePrReview so COMPLETED/FAILED/stale rows can be reset
+  // and graph reviews wait for (or re-fire) indexing.
   const scheduled = await schedulePrReview({
     repositoryId: repository.id,
     userId: repository.userId,
@@ -276,6 +257,7 @@ async function handlePullRequestEvent(payload: PullRequestPayload) {
     mode,
     installationId,
     indexResult,
+    existingReviewId: existingReview?.id,
   });
 
   return NextResponse.json({

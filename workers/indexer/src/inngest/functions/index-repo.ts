@@ -8,7 +8,6 @@ import {
 } from "../../indexer/index-incremental.ts";
 import {
   failPendingGraphReviewsForCommit,
-  triggerPendingGraphReviewsForCommit,
 } from "../../services/graph-review-after-index.ts";
 
 async function markJobProcessing(jobId: string | undefined): Promise<void> {
@@ -139,12 +138,80 @@ export const indexRepo = inngest.createFunction(
         },
       });
 
-      await step.run("trigger-graph-reviews", async () => {
-        return triggerPendingGraphReviewsForCommit({
+      const pendingReviews = await step.run("load-pending-graph-reviews", async () => {
+        const repository = await db.repository.findUnique({
+          where: { id: repositoryId },
+          include: { installation: true },
+        });
+
+        if (!repository?.installation?.installationId) {
+          logger.warn("index-repo: no installation — cannot trigger reviews", {
+            repositoryId,
+            headSha,
+          });
+          return [] as Array<{
+            reviewId: string;
+            prNumber: number;
+            userId: string;
+            headSha: string;
+            mode: string;
+            installationId: number;
+          }>;
+        }
+
+        const installationId = Number(repository.installation.installationId);
+        const pending = await db.review.findMany({
+          where: {
+            repositoryId,
+            headSha,
+            mode: "graph",
+            status: "PENDING",
+          },
+          select: {
+            id: true,
+            prNumber: true,
+            userId: true,
+            headSha: true,
+            mode: true,
+          },
+        });
+
+        logger.info("index-repo: pending graph reviews to trigger", {
           repositoryId,
           headSha,
+          count: pending.length,
+          reviewIds: pending.map((r) => r.id),
         });
+
+        return pending
+          .filter((review) => Boolean(review.headSha))
+          .map((review) => ({
+            reviewId: review.id,
+            prNumber: review.prNumber,
+            userId: review.userId,
+            headSha: review.headSha!,
+            mode: review.mode,
+            installationId,
+          }));
       });
+
+      if (pendingReviews.length > 0) {
+        await step.sendEvent(
+          "trigger-graph-reviews",
+          pendingReviews.map((review) => ({
+            name: "review/pr.requested" as const,
+            data: {
+              reviewId: review.reviewId,
+              repositoryId,
+              prNumber: review.prNumber,
+              userId: review.userId,
+              headSha: review.headSha,
+              mode: review.mode,
+              installationId: review.installationId,
+            },
+          })),
+        );
+      }
     }
 
     logger.info("index-repo: completed", {
