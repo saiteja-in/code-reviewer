@@ -1,6 +1,4 @@
 import Link from "next/link";
-import type { inferRouterOutputs } from "@trpc/server";
-import type { AppRouter } from "@/server/api/root";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,9 +16,9 @@ import {
   FileText,
 } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
+import type { PullRequestListItem } from "@/server/api/routers/pull-request";
 
-type RouterOutputs = inferRouterOutputs<AppRouter>;
-export type PullRequestListItem = RouterOutputs["pullRequest"]["list"][number];
+export type { PullRequestListItem };
 
 export function PullRequestCard({
   pr,

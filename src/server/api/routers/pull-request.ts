@@ -1,17 +1,30 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import type { ReviewStatus } from "@prisma/client";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import {
   fetchPullRequestsGraphQL,
   fetchPullRequest,
   getGitHubAccessToken,
   fetchPullRequestFiles,
+  type PullRequestSummary,
 } from "@/server/services/github";
+
+/** Plain DTO so tRPC `inferRouterOutputs` does not collapse Prisma payloads to `{}`. */
+export type PullRequestListReview = {
+  prNumber: number;
+  status: ReviewStatus;
+  createdAt: Date;
+};
+
+export type PullRequestListItem = PullRequestSummary & {
+  review: PullRequestListReview | null;
+};
 
 export const pullRequestRouter = createTRPCRouter({
   list: protectedProcedure
     .input(z.object({ repositoryId: z.string() }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<PullRequestListItem[]> => {
       const repository = await ctx.db.repository.findUnique({
         where: { id: input.repositoryId, userId: ctx.user.id },
       });
@@ -56,7 +69,16 @@ export const pullRequestRouter = createTRPCRouter({
         orderBy: { createdAt: "desc" },
       });
 
-      const reviewMap = new Map(existingReviews.map((r) => [r.prNumber, r]));
+      const reviewMap = new Map(
+        existingReviews.map((r) => [
+          r.prNumber,
+          {
+            prNumber: r.prNumber,
+            status: r.status,
+            createdAt: r.createdAt,
+          } satisfies PullRequestListReview,
+        ]),
+      );
 
       return prs.map((pr) => ({
         ...pr,
