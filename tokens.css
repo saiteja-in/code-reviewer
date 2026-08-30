@@ -1,0 +1,19 @@
+/* Hallmark · Cobalt tokens (landing only — scoped .lp) */
+.lp {
+  --color-paper: oklch(96.5% 0.012 250);
+  --color-paper-2: oklch(93.5% 0.016 250);
+  --color-ink: oklch(24% 0.04 252);
+  --color-accent: oklch(46% 0.16 264);
+  --color-focus: oklch(50% 0.18 264);
+  --font-display: var(--font-landing-display), ui-sans-serif, sans-serif;
+  --font-body: var(--font-landing-body), ui-sans-serif, sans-serif;
+  --font-outlier: var(--font-landing-mono), ui-monospace, monospace;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+  --text-display: clamp(2.25rem, 5vw + 0.4rem, 3.75rem);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-micro: 120ms;
+  --radius-ctrl: 6px;
+  --rule: 1px;
+}

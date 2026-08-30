@@ -50,6 +50,7 @@ function setStoredThemeMode(mode: ThemeMode) {
 
 function applyThemePreset(preset: ThemePreset, mode: ThemeMode) {
   const root = document.documentElement;
+  root.classList.toggle("dark", mode === "dark");
   [...root.style].forEach((prop) => {
     if (prop.startsWith("--")) root.style.removeProperty(prop);
   });

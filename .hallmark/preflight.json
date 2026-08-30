@@ -1,0 +1,8 @@
+{
+  "fontStack": "Space Grotesk + IBM Plex Sans + IBM Plex Mono (landing); Geist/Inter remain on dashboard",
+  "palette": "shadcn zinc OKLCH on dashboard; Cobalt landing tokens scoped to .lp",
+  "motion": "none in package.json; landing uses CSS only",
+  "spacing": "Tailwind v4 app-wide; landing uses 4pt named scale",
+  "framework": "Next.js 16 App Router",
+  "scannedAt": "2026-08-30"
+}

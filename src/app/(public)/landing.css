@@ -1,0 +1,138 @@
+/* Landing type + grid only. Color comes from shadcn theme tokens. */
+
+.landing {
+  font-family: var(--font-landing-body), ui-sans-serif, sans-serif;
+}
+
+:is(html:has(.landing), body:has(.landing)) {
+  overflow-x: clip;
+}
+
+.landing-inner {
+  width: min(72rem, 100%);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 2.5rem);
+  min-width: 0;
+}
+
+.landing-hero {
+  position: relative;
+  isolation: isolate;
+  padding-block: 4rem 6rem;
+  overflow: clip;
+  min-width: 0;
+}
+
+.landing-hero-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  width: min(40rem, 100%);
+  margin-inline: auto;
+  text-align: center;
+  min-width: 0;
+}
+
+.landing-hero-proof {
+  padding-top: 0.25rem;
+}
+
+.landing-squiggle {
+  display: block;
+  width: 100%;
+  height: 2.75rem;
+  color: var(--muted-foreground);
+  opacity: 0.55;
+}
+
+.landing-squiggle path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: landing-squiggle-draw 0.9s ease-out 0.12s forwards;
+}
+
+@keyframes landing-squiggle-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.landing-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.45;
+}
+
+.landing-brand {
+  font-family: var(--font-landing-display), ui-sans-serif, sans-serif;
+  font-style: normal;
+  font-weight: 700;
+  font-size: clamp(2.25rem, 5vw + 0.4rem, 3.75rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  margin: 0;
+}
+
+.landing-line {
+  font-family: var(--font-landing-display), ui-sans-serif, sans-serif;
+  font-style: normal;
+  font-weight: 500;
+  font-size: clamp(1.75rem, 4vw + 0.5rem, 2.75rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  margin: 0;
+}
+
+.landing-section-head {
+  font-family: var(--font-landing-display), ui-sans-serif, sans-serif;
+  font-style: normal;
+  font-weight: 600;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  margin: 0;
+}
+
+.landing-caret {
+  display: inline-block;
+  width: 0.55ch;
+  height: 1em;
+  margin-left: 0.15ch;
+  background: var(--primary);
+  vertical-align: text-bottom;
+  animation: landing-blink 1s steps(2) infinite;
+}
+
+@keyframes landing-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-caret,
+  .landing-squiggle path {
+    animation: none;
+  }
+
+  .landing-squiggle path {
+    stroke-dashoffset: 0;
+  }
+}
