@@ -4,7 +4,7 @@ import type { AppRouter } from "@/server/api/root";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Lock, Globe, ArrowRight } from "lucide-react";
+import { Lock, Globe, ArrowRight, Bot, AlertCircle } from "lucide-react";
 import { DisconnectRepoButton } from "./disconnect-repo-button";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -33,6 +33,23 @@ export function ConnectedRepoCard({ repo }: { repo: ConnectedRepo }) {
                   <Badge variant="outline" className="text-xs px-1.5 py-0 h-5">
                     {repo.private ? "Private" : "Public"}
                   </Badge>
+                  {repo.appInstalled ? (
+                    <Badge
+                      variant="outline"
+                      className="text-xs px-1.5 py-0 h-5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
+                    >
+                      <Bot className="size-3 mr-1" />
+                      App installed
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="text-xs px-1.5 py-0 h-5 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                    >
+                      <AlertCircle className="size-3 mr-1" />
+                      Install App required
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>

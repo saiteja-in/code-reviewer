@@ -3,6 +3,7 @@ import { getServerApi } from "@/lib/trpc/server";
 import { ConnectedRepos } from "./_components/connected-repos";
 import { ImportPanel } from "./_components/import-panel";
 import { AddRepoToggle } from "./_components/add-repo-toggle";
+import { InstallGitHubAppBanner } from "./_components/install-github-app-banner";
 
 export const metadata: Metadata = {
   title: "Repositories",
@@ -36,6 +37,10 @@ export default async function ReposPage({
       {add && (
         <ImportPanel connectedGithubIds={repos.map((r) => r.githubId)} />
       )}
+
+      <InstallGitHubAppBanner
+        show={repos.length > 0 && repos.some((r) => !r.appInstalled)}
+      />
 
       <ConnectedRepos repos={repos} />
     </div>

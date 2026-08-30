@@ -10,9 +10,9 @@ Reviews run as background jobs (Inngest) and can be triggered from the UI or aut
 - **Repos** — Import and connect GitHub repositories you have access to
 - **PR browsing** — List pull requests, view file diffs, and open PR detail pages
 - **Manual reviews** — Trigger a review from the PR page
-- **Automatic reviews** — GitHub `pull_request` webhook on `opened`, `synchronize`, and `reopened` (skips drafts)
+- **Automatic reviews** — GitHub App webhook on PR `opened`, `synchronize`, and `reopened` (skips drafts)
 - **Claude analysis** — Structured output via Anthropic (`claude-sonnet-4-6`): summary, risk score, categorized inline comments
-- **GitHub post-back** — Posts a PR review (with inline comments when mappable) and a commit status using the user’s OAuth token
+- **Bot post-back** — Posts PR review + GitHub Check Run as the **GitHub App**
 - **Dashboard** — Live status polling for pending/processing/completed/failed reviews
 
 ## Tech stack
@@ -46,7 +46,7 @@ flowchart LR
 2. Inngest function `review-pr` marks it `PROCESSING`, loads the PR and files with the user’s GitHub token, calls Claude, then saves results.
 3. On success it posts a GitHub PR review + commit status, then marks the review `COMPLETED` (or `FAILED` on error / `onFailure`).
 
-GitHub API access uses the connected user’s OAuth token (`repo` scope), not a GitHub App.
+GitHub API access: **OAuth** for dashboard login and fetching PR diffs; **GitHub App installation token** for posting reviews and Check Runs.
 
 ## Project structure
 
@@ -116,9 +116,13 @@ Inngest v4 defaults to Cloud mode. For local development set `INNGEST_DEV=1` or 
 | `RESEND_API_KEY` | Yes | Email OTP delivery |
 | `RESEND_FROM_EMAIL` | Yes | Verified sender address |
 | `ANTHROPIC_API_KEY` | Yes | Claude reviews fail without it |
+| `GITHUB_APP_ID` | Yes | GitHub App numeric ID |
+| `GITHUB_APP_PRIVATE_KEY` | Yes | App PEM private key (single line with `\n`) |
+| `GITHUB_WEBHOOK_SECRET` | Yes | Webhook secret from GitHub App settings |
+| `NEXT_PUBLIC_GITHUB_APP_SLUG` | Yes | App slug for install URL (`github.com/apps/{slug}`) |
 | `INNGEST_DEV` | Local | Set to `1` for local Inngest |
 | `INNGEST_SIGNING_KEY` | Prod | Replaces `INNGEST_DEV` in production |
-| `GITHUB_WEBHOOK_SECRET` | Prod / webhooks | HMAC secret; optional in local (verification skipped with a warning) |
+| `INNGEST_EVENT_KEY` | Prod | Required to send events in production |
 | `NODE_ENV` | Optional | `development` / `production` |
 
 Example `.env` (placeholders only):
@@ -134,35 +138,38 @@ RESEND_API_KEY=
 RESEND_FROM_EMAIL=
 ANTHROPIC_API_KEY=
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB
-INNGEST_DEV=1
+GITHUB_APP_ID=
+GITHUB_APP_PRIVATE_KEY=
 GITHUB_WEBHOOK_SECRET=
+NEXT_PUBLIC_GITHUB_APP_SLUG=
+INNGEST_DEV=1
 ```
 
-GitHub OAuth scopes requested: `read:user`, `user:email`, `repo` (needed to read private PRs and post reviews/statuses).
+GitHub OAuth scopes requested: `read:user`, `user:email`, `repo` (needed to read private PRs in the dashboard).
 
-## GitHub webhooks (local)
+## GitHub App setup
 
-Repo connect does **not** auto-register webhooks. For automatic reviews locally:
+Automatic reviews use a **GitHub App** (one webhook URL for all repos). See [scripts/setup/github-app-setup.md](scripts/setup/github-app-setup.md) for full registration steps.
 
-1. Expose the app: `ngrok http 3000` (or similar).
-2. In the GitHub repo: **Settings → Webhooks → Add webhook**
-   - Payload URL: `https://YOUR_TUNNEL/api/webhooks/github`
-   - Content type: `application/json`
-   - Secret: same value as `GITHUB_WEBHOOK_SECRET`
-   - Events: **Pull requests**
+### Production (e.g. codereview.teja.cc)
 
-Or with the GitHub CLI:
+1. **GitHub App settings** → Webhook URL: `https://YOUR_DOMAIN/api/webhooks/github`
+2. **Events:** Pull request, Installation, Installation repositories
+3. **Permissions:** Contents (read), Metadata (read), Pull requests (read/write), Checks (read/write)
+4. **Vercel env:** `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `NEXT_PUBLIC_GITHUB_APP_SLUG`
+5. Remove any **per-repo** webhooks — the App webhook replaces them
 
-```bash
-gh api repos/OWNER/REPO/hooks \
-  -f url='https://YOUR_TUNNEL/api/webhooks/github' \
-  -f events='["pull_request"]' \
-  -f secret='your-secret-here' \
-  -f active='true' \
-  -F content_type='json'
-```
+### User flow
 
-Keep `pnpm dev` and the Inngest CLI running so webhook-triggered jobs execute.
+1. Sign in and **connect repos** in the dashboard
+2. Click **Install GitHub App** and select the same repos on GitHub
+3. Open or update a PR → review runs automatically; results post as the App bot with a Check Run
+
+Verify env: `node scripts/verify-github-app-env.mjs`
+
+### Local dev
+
+Use a tunnel (ngrok/cloudflared) and set the App webhook URL to `https://YOUR_TUNNEL/api/webhooks/github`. Keep `pnpm dev` and Inngest CLI running.
 
 ## App routes
 
@@ -179,7 +186,7 @@ Keep `pnpm dev` and the Inngest CLI running so webhook-triggered jobs execute.
 | `/api/auth/[...all]` | better-auth |
 | `/api/trpc/[trpc]` | tRPC |
 | `/api/inngest` | Inngest serve |
-| `/api/webhooks/github` | GitHub webhooks |
+| `/api/webhooks/github` | GitHub App webhooks (installation + pull_request) |
 
 ## Data model
 
@@ -187,8 +194,9 @@ Keep `pnpm dev` and the Inngest CLI running so webhook-triggered jobs execute.
 | --- | --- |
 | `User` | App user; optional `githubUsername` |
 | `Session` / `Account` / `Verification` | better-auth sessions, OAuth accounts, OTP tokens |
-| `Repository` | Connected GitHub repo (`githubId`, `fullName`, …) |
-| `Review` | PR review job + results + GitHub post-back fields |
+| `GitHubInstallation` | GitHub App installation (org/user account) |
+| `Repository` | Connected GitHub repo; optional link to `GitHubInstallation` |
+| `Review` | PR review job + results + GitHub post-back + `checkRunId` |
 | `ReviewStatus` | `PENDING` \| `PROCESSING` \| `COMPLETED` \| `FAILED` |
 
 ## Scripts

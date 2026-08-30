@@ -10,9 +10,23 @@ export const repositoryRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
     const repositories = await ctx.db.repository.findMany({
       where: { userId: ctx.user.id },
+      include: { installation: true },
       orderBy: { createdAt: "desc" },
     });
-    return repositories;
+
+    return repositories.map((repo) => ({
+      id: repo.id,
+      userId: repo.userId,
+      githubId: repo.githubId,
+      name: repo.name,
+      fullName: repo.fullName,
+      private: repo.private,
+      htmlUrl: repo.htmlUrl,
+      installationId: repo.installationId,
+      appInstalled: repo.installationId !== null,
+      createdAt: repo.createdAt,
+      updatedAt: repo.updatedAt,
+    }));
   }),
 
   get: protectedProcedure

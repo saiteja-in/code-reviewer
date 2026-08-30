@@ -408,3 +408,83 @@ export async function createCommitStatus(
     },
   );
 }
+
+export const CHECK_RUN_NAME = "AI Code Review";
+
+export type CheckRunConclusion =
+  | "success"
+  | "failure"
+  | "neutral"
+  | "cancelled"
+  | "skipped"
+  | "timed_out"
+  | "action_required";
+
+export interface CreatedCheckRun {
+  id: number;
+  html_url?: string;
+}
+
+export async function createCheckRun(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  input: {
+    headSha: string;
+    name?: string;
+    detailsUrl?: string;
+  },
+): Promise<CreatedCheckRun> {
+  const response = await githubFetch(
+    accessToken,
+    `https://api.github.com/repos/${owner}/${repo}/check-runs`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: input.name ?? CHECK_RUN_NAME,
+        head_sha: input.headSha,
+        status: "in_progress",
+        details_url: input.detailsUrl,
+        output: {
+          title: "AI Review in progress",
+          summary: "Analyzing pull request changes…",
+        },
+      }),
+    },
+  );
+
+  return (await response.json()) as CreatedCheckRun;
+}
+
+export async function updateCheckRun(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  checkRunId: number | bigint,
+  input: {
+    conclusion?: CheckRunConclusion;
+    status?: "completed" | "in_progress" | "queued";
+    title: string;
+    summary: string;
+    detailsUrl?: string;
+  },
+): Promise<void> {
+  await githubFetch(
+    accessToken,
+    `https://api.github.com/repos/${owner}/${repo}/check-runs/${checkRunId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: input.status ?? "completed",
+        conclusion: input.conclusion,
+        details_url: input.detailsUrl,
+        output: {
+          title: input.title.slice(0, 255),
+          summary: input.summary,
+        },
+      }),
+    },
+  );
+}

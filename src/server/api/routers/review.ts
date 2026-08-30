@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { inngest } from "@/server/inngest";
+import { GITHUB_APP_INSTALLATION_REQUIRED } from "@/server/services/github-app";
 import {
   fetchPullRequest,
   getGitHubAccessToken,
@@ -18,12 +19,24 @@ export const reviewRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const repository = await ctx.db.repository.findUnique({
         where: { id: input.repositoryId, userId: ctx.user.id },
+        include: { installation: true },
       });
 
       if (!repository) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Repository not found",
+        });
+      }
+
+      const installationId = repository.installation?.installationId
+        ? Number(repository.installation.installationId)
+        : null;
+
+      if (!installationId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: GITHUB_APP_INSTALLATION_REQUIRED,
         });
       }
 
@@ -43,12 +56,23 @@ export const reviewRouter = createTRPCRouter({
         });
       }
 
-      const pr = await fetchPullRequest(
-        accessToken,
-        owner,
-        repo,
-        input.prNumber,
-      );
+      let pr;
+      try {
+        pr = await fetchPullRequest(
+          accessToken,
+          owner,
+          repo,
+          input.prNumber,
+        );
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to fetch pull request";
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `GitHub API: ${message}`,
+          cause: err,
+        });
+      }
 
       const review = await ctx.db.review.create({
         data: {
@@ -61,15 +85,32 @@ export const reviewRouter = createTRPCRouter({
         },
       });
 
-      await inngest.send({
-        name: "review/pr.requested",
-        data: {
-          reviewId: review.id,
-          repositoryId: repository.id,
-          prNumber: pr.number,
-          userId: ctx.user.id,
-        },
-      });
+      try {
+        await inngest.send({
+          name: "review/pr.requested",
+          data: {
+            reviewId: review.id,
+            repositoryId: repository.id,
+            prNumber: pr.number,
+            userId: ctx.user.id,
+            installationId,
+          },
+        });
+      } catch (err) {
+        const raw =
+          err instanceof Error ? err.message : "Failed to queue review job";
+        const inngestDev = process.env.INNGEST_DEV === "1";
+        const hint = inngestDev
+          ? " INNGEST_DEV=1 is set — remove it in production and configure INNGEST_EVENT_KEY + INNGEST_SIGNING_KEY."
+          : !process.env.INNGEST_EVENT_KEY
+            ? " Set INNGEST_EVENT_KEY in production (Inngest dashboard → Event Keys)."
+            : "";
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Inngest: ${raw}.${hint}`,
+          cause: err,
+        });
+      }
 
       return { reviewId: review.id };
     }),

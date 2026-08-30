@@ -2,18 +2,25 @@ import { inngest } from "../client";
 import { db } from "@/server/db";
 import { reviewCode } from "@/server/services/ai";
 import {
+  GITHUB_APP_INSTALLATION_REQUIRED,
+  requireInstallationAccessToken,
+} from "@/server/services/github-app";
+import { resolveGitHubInstallationId } from "@/server/services/github-webhook-installation";
+import {
   fetchPullRequest,
   fetchPullRequestFiles,
   getGitHubAccessToken,
   postPullRequestReview,
-  createCommitStatus,
+  createCheckRun,
+  updateCheckRun,
   GitHubApiError,
 } from "@/server/services/github";
 import { mapInlineComments } from "@/server/services/diff-line-mapper";
 import {
   buildReviewBody,
   buildInlineCommentBody,
-  statusFromReview,
+  checkRunConclusionFromReview,
+  checkRunOutputFromReview,
 } from "@/server/services/review-format";
 
 export type ReviewPREvent = {
@@ -23,6 +30,7 @@ export type ReviewPREvent = {
     repositoryId: string;
     prNumber: number;
     userId: string;
+    installationId?: number | null;
   };
 };
 
@@ -31,6 +39,7 @@ interface PostToGithubResult {
   githubReviewId?: bigint;
   githubReviewUrl?: string;
   commitStatusSha?: string;
+  checkRunId?: bigint;
   postError?: string;
 }
 
@@ -39,13 +48,51 @@ export const reviewPR = inngest.createFunction(
     id: "review-pr",
     retries: 2,
     triggers: [{ event: "review/pr.requested" }],
+    concurrency: [{ key: "event.data.reviewId", limit: 1 }],
     onFailure: async ({ event, error }) => {
-      const reviewId = (event.data.event.data as ReviewPREvent["data"])
-        .reviewId;
+      const eventData = event.data.event.data as ReviewPREvent["data"];
+      const { reviewId } = eventData;
+
+      const review = await db.review.findUnique({
+        where: { id: reviewId },
+        include: { repository: { include: { installation: true } } },
+      });
+
       await db.review.update({
         where: { id: reviewId },
         data: { status: "FAILED", error: error.message || "Review failed" },
       });
+
+      if (!review?.checkRunId || !review.repository) {
+        return;
+      }
+
+      const [owner, repoName] = review.repository.fullName.split("/");
+      if (!owner || !repoName) {
+        return;
+      }
+
+      const installationId = await resolveGitHubInstallationId(
+        review.repositoryId,
+        eventData.installationId,
+      );
+
+      try {
+        const botToken = await requireInstallationAccessToken(installationId);
+        await updateCheckRun(
+          botToken,
+          owner,
+          repoName,
+          review.checkRunId,
+          {
+            conclusion: "failure",
+            title: "AI review failed",
+            summary: error.message || "Review failed",
+          },
+        );
+      } catch (updateErr) {
+        console.error("Failed to update check run on failure:", updateErr);
+      }
     },
   },
   async ({ event, step }) => {
@@ -61,6 +108,7 @@ export const reviewPR = inngest.createFunction(
     const repository = await step.run("get-repository", async () => {
       return db.repository.findUnique({
         where: { id: repositoryId },
+        include: { installation: true },
       });
     });
 
@@ -74,21 +122,63 @@ export const reviewPR = inngest.createFunction(
       return { success: false, error: "No repository found" };
     }
 
-    const accessToken = await step.run("get-access-token", async () => {
-      return getGitHubAccessToken(userId);
+    const installationId = await step.run("resolve-installation-id", async () => {
+      return resolveGitHubInstallationId(
+        repositoryId,
+        event.data.installationId,
+      );
     });
 
-    if (!accessToken) {
-      await step.run("mark-failed-no-token", async () => {
+    const botTokenResult = await step.run("get-bot-token", async () => {
+      try {
+        const token = await requireInstallationAccessToken(installationId);
+        return { ok: true as const, token };
+      } catch (err) {
+        return {
+          ok: false as const,
+          error:
+            err instanceof Error
+              ? err.message
+              : GITHUB_APP_INSTALLATION_REQUIRED,
+        };
+      }
+    });
+
+    if (!botTokenResult.ok) {
+      await step.run("mark-failed-no-bot", async () => {
         await db.review.update({
           where: { id: reviewId },
           data: {
             status: "FAILED",
-            error: "GitHub access token not found",
+            error: botTokenResult.error,
+            postError: botTokenResult.error,
           },
         });
       });
-      return { success: false, error: "GitHub access token not found" };
+      return { success: false, error: botTokenResult.error };
+    }
+
+    const botToken = botTokenResult.token;
+
+    const fetchToken = await step.run("get-fetch-token", async () => {
+      return getGitHubAccessToken(userId);
+    });
+
+    if (!fetchToken) {
+      await step.run("mark-failed-no-fetch-token", async () => {
+        await db.review.update({
+          where: { id: reviewId },
+          data: {
+            status: "FAILED",
+            error:
+              "GitHub OAuth token not found — connect GitHub in the dashboard to fetch PR data",
+          },
+        });
+      });
+      return {
+        success: false,
+        error: "GitHub access token not found for fetch",
+      };
     }
 
     const [owner, repo] = repository.fullName.split("/");
@@ -105,12 +195,31 @@ export const reviewPR = inngest.createFunction(
       return { success: false, error: "Invalid repository name" };
     }
 
-    const files = await step.run("fetch-pr-files", async () => {
-      return fetchPullRequestFiles(accessToken, owner, repo, prNumber);
+    const pr = await step.run("fetch-pr", async () => {
+      return fetchPullRequest(fetchToken, owner, repo, prNumber);
     });
 
-    const pr = await step.run("fetch-pr", async () => {
-      return fetchPullRequest(accessToken, owner, repo, prNumber);
+    const appBase = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+    const appPrUrl = appBase
+      ? `${appBase}/repos/${repositoryId}/pr/${prNumber}`
+      : undefined;
+
+    const checkRunId = await step.run("create-check-run", async () => {
+      const checkRun = await createCheckRun(botToken, owner, repo, {
+        headSha: pr.head.sha,
+        detailsUrl: appPrUrl,
+      });
+
+      await db.review.update({
+        where: { id: reviewId },
+        data: { checkRunId: BigInt(checkRun.id) },
+      });
+
+      return checkRun.id;
+    });
+
+    const files = await step.run("fetch-pr-files", async () => {
+      return fetchPullRequestFiles(fetchToken, owner, repo, prNumber);
     });
 
     const reviewResult = await step.run("generate-review", async () => {
@@ -152,11 +261,6 @@ export const reviewPR = inngest.createFunction(
     const postResult = await step.run(
       "post-to-github",
       async (): Promise<PostToGithubResult> => {
-        const appBase = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
-        const appPrUrl = appBase
-          ? `${appBase}/repos/${repositoryId}/pr/${prNumber}`
-          : undefined;
-
         const { inline, offDiff } = mapInlineComments(
           reviewResult.comments,
           files.map((f) => ({ filename: f.filename, patch: f.patch })),
@@ -171,7 +275,7 @@ export const reviewPR = inngest.createFunction(
 
         try {
           const posted = await postPullRequestReview(
-            accessToken,
+            botToken,
             owner,
             repo,
             prNumber,
@@ -182,23 +286,20 @@ export const reviewPR = inngest.createFunction(
             },
           );
 
-          const status = statusFromReview(reviewResult);
-          await createCommitStatus(
-            accessToken,
-            owner,
-            repo,
-            pr.head.sha,
-            {
-              ...status,
-              targetUrl: appPrUrl,
-            },
-          );
+          const output = checkRunOutputFromReview(reviewResult);
+          await updateCheckRun(botToken, owner, repo, checkRunId, {
+            conclusion: checkRunConclusionFromReview(reviewResult),
+            title: output.title,
+            summary: output.summary,
+            detailsUrl: appPrUrl,
+          });
 
           return {
             success: true,
             githubReviewId: BigInt(posted.id),
             githubReviewUrl: posted.html_url,
             commitStatusSha: pr.head.sha,
+            checkRunId: BigInt(checkRunId),
           };
         } catch (err) {
           const message =
@@ -208,15 +309,28 @@ export const reviewPR = inngest.createFunction(
                 ? err.message
                 : "Unknown error posting to GitHub";
 
-          // Non-fatal: analysis succeeded; don't rethrow for retries on 404/422.
+          try {
+            await updateCheckRun(botToken, owner, repo, checkRunId, {
+              conclusion: "failure",
+              title: "Failed to post review",
+              summary: message,
+              detailsUrl: appPrUrl,
+            });
+          } catch {
+            // ignore secondary failure
+          }
+
           if (
             err instanceof GitHubApiError &&
             (err.status === 404 || err.status === 422)
           ) {
-            return { success: false, postError: message };
+            return {
+              success: false,
+              postError: message,
+              checkRunId: BigInt(checkRunId),
+            };
           }
 
-          // Retry transient errors (rate limits, 5xx).
           throw err;
         }
       },
@@ -230,6 +344,7 @@ export const reviewPR = inngest.createFunction(
           githubReviewUrl: postResult.githubReviewUrl ?? null,
           postedAt: postResult.success ? new Date() : null,
           commitStatusSha: postResult.commitStatusSha ?? null,
+          checkRunId: postResult.checkRunId ?? BigInt(checkRunId),
           postError: postResult.postError ?? null,
         },
       });
