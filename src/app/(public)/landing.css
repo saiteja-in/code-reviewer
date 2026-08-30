@@ -9,6 +9,8 @@
 }
 
 .landing-inner {
+  position: relative;
+  z-index: 1;
   width: min(72rem, 100%);
   margin-inline: auto;
   padding-inline: clamp(1rem, 4vw, 2.5rem);
@@ -75,6 +77,72 @@
   opacity: 0.45;
 }
 
+.landing-float {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.landing-float-bit {
+  position: absolute;
+  margin: 0;
+  font-family: var(--font-landing-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: var(--muted-foreground);
+  opacity: 0.32;
+  white-space: pre;
+  animation: landing-drift 11s ease-in-out infinite;
+}
+
+.landing-float-bit:nth-child(1) {
+  top: 11%;
+  left: 5%;
+}
+
+.landing-float-bit:nth-child(2) {
+  top: 16%;
+  right: 6%;
+  animation-duration: 13s;
+  animation-delay: -3s;
+  font-size: 0.625rem;
+}
+
+.landing-float-bit:nth-child(3) {
+  bottom: 24%;
+  left: 7%;
+  animation-duration: 12s;
+  animation-delay: -6s;
+}
+
+.landing-float-bit:nth-child(4) {
+  bottom: 14%;
+  right: 5%;
+  animation-duration: 14s;
+  animation-delay: -2s;
+  font-size: 0.625rem;
+}
+
+@keyframes landing-drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.55rem);
+  }
+}
+
+@media (min-width: 64rem) {
+  .landing-float {
+    display: block;
+  }
+}
+
 .landing-brand {
   font-family: var(--font-landing-display), ui-sans-serif, sans-serif;
   font-style: normal;
@@ -128,7 +196,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .landing-caret,
-  .landing-squiggle path {
+  .landing-squiggle path,
+  .landing-float-bit {
     animation: none;
   }
 

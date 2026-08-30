@@ -19,6 +19,15 @@ export default async function Home() {
   return (
     <div className="landing">
       <section className="landing-hero">
+        <div className="landing-float" aria-hidden="true">
+          <pre className="landing-float-bit">{`+ guard(user)
++ return next()`}</pre>
+          <pre className="landing-float-bit">{`src/lib/session.ts
+L18  token.expires`}</pre>
+          <pre className="landing-float-bit">{`conclusion: "success"`}</pre>
+          <pre className="landing-float-bit">{`- query(raw)
++ query(escape(raw))`}</pre>
+        </div>
         <div className="landing-inner">
           <div className="landing-hero-stack">
             <p className="landing-brand">AI Code Review</p>
