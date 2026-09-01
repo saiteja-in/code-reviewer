@@ -1,7 +1,11 @@
+import type { Metadata } from "next";
 import { buttonVariants } from "@/components/ui/button";
+import { privateMetadata } from "@/lib/metadata";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { ReactNode } from "react";
+
+export const metadata: Metadata = privateMetadata;
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (

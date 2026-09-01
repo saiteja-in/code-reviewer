@@ -110,7 +110,7 @@ Inngest v4 defaults to Cloud mode. For local development set `INNGEST_DEV=1` or 
 | `DATABASE_URL` | Yes | Postgres connection string (Prisma) |
 | `BETTER_AUTH_SECRET` | Yes | Secret for better-auth sessions |
 | `BETTER_AUTH_URL` | Yes | App origin, e.g. `http://localhost:3000` |
-| `NEXT_PUBLIC_APP_URL` | Yes | Public app URL (auth client, review links) |
+| `NEXT_PUBLIC_APP_URL` | Yes | Public app URL (auth, SEO canonical URLs, sitemap) |
 | `GITHUB_CLIENT_ID` | Yes | GitHub OAuth App client ID |
 | `GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth App client secret |
 | `RESEND_API_KEY` | Yes | Email OTP delivery |
@@ -123,6 +123,7 @@ Inngest v4 defaults to Cloud mode. For local development set `INNGEST_DEV=1` or 
 | `INNGEST_DEV` | Local | Set to `1` for local Inngest |
 | `INNGEST_SIGNING_KEY` | Prod | Replaces `INNGEST_DEV` in production |
 | `INNGEST_EVENT_KEY` | Prod | Required to send events in production |
+| `GOOGLE_SITE_VERIFICATION` | Optional | Google Search Console HTML tag verification code |
 | `NODE_ENV` | Optional | `development` / `production` |
 
 Example `.env` (placeholders only):

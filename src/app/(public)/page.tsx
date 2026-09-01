@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { currentUser } from "@/lib/user";
+import { createMetadata } from "@/lib/metadata";
+import { siteConfig } from "@/lib/site";
+import { JsonLd, getHomeJsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
-export const metadata: Metadata = {
-  title: "AI Code Review",
-  description:
-    "AI reviews your GitHub pull requests and posts a check run on the PR.",
-};
+export const metadata: Metadata = createMetadata({
+  absoluteTitle: siteConfig.seoTitle,
+  description: siteConfig.seoDescription,
+  path: "/",
+});
 
 export default async function Home() {
   const user = await currentUser();
@@ -17,7 +20,9 @@ export default async function Home() {
   const primaryLabel = user ? "Open dashboard" : "Create account";
 
   return (
-    <div className="landing">
+    <>
+      <JsonLd data={getHomeJsonLd()} />
+      <div className="landing">
       <section className="landing-hero">
         <div className="landing-float" aria-hidden="true">
           <pre className="landing-float-bit">{`+ guard(user)
@@ -30,7 +35,9 @@ L18  token.expires`}</pre>
         </div>
         <div className="landing-inner">
           <div className="landing-hero-stack">
-            <p className="landing-brand">AI Code Review</p>
+            <p className="landing-brand" aria-label={siteConfig.name}>
+              AI Code Review
+            </p>
             <h1 className="landing-line">Reviews land on the PR.</h1>
             <p className="m-0 text-muted-foreground">
               An AI reviewer for GitHub pull requests. Install the App and
@@ -159,5 +166,6 @@ L18  token.expires`}</pre>
         </Button>
       </footer>
     </div>
+    </>
   );
 }
